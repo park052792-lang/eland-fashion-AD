@@ -358,6 +358,30 @@ body.non-admin #save-file-btn{display:none}
 .img-mode-badge.local{background:#F3F4F6;color:#6B7280}
 /* 비관리자: 설정 숨김 */
 body.non-admin .cloud-setup-wrap{display:none}
+
+/* ─ 공유저장소 설정 UI ─ */
+.share-store-wrap{
+  background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;
+  padding:10px 14px;margin-bottom:8px;font-size:12px
+}
+.share-store-row{display:flex;gap:6px;align-items:center;margin-top:6px}
+.share-store-inp{
+  flex:1;border:1px solid #FED7AA;border-radius:5px;
+  padding:4px 8px;font-size:11px;font-family:inherit;min-width:0
+}
+.share-store-inp:focus{outline:none;border-color:#EA580C}
+.share-store-btn{
+  background:#EA580C;color:#fff;border:none;border-radius:5px;
+  padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap
+}
+.share-store-btn:hover{background:#C2410C}
+.share-store-status{display:flex;align-items:center;gap:6px;font-size:11px}
+.ssdot{width:8px;height:8px;border-radius:50%;flex-shrink:0;background:#D1D5DB}
+.ssdot.on{background:#059669;box-shadow:0 0 0 2px rgba(5,150,105,.25)}
+.ssdot.sync{background:#F59E0B;animation:pulse .8s ease infinite alternate}
+@keyframes pulse{from{opacity:.4}to{opacity:1}}
+body.non-admin .share-store-wrap{display:none}
+body.non-admin .cloud-setup-wrap{display:none}
 </style>
 </head>
 <body>
@@ -393,6 +417,21 @@ body.non-admin .cloud-setup-wrap{display:none}
 <nav><a href="#summary" class="nav-a report-only" style="color:#374151;background:#F1F5F9;border-color:#E2E8F0">📋 전체 요약</a><a href="#스파오" class="nav-a" style="color:#C0392B;background:#FFF5F3;border-color:#FECACA">스파오</a><a href="#후아유" class="nav-a" style="color:#1D4ED8;background:#EFF6FF;border-color:#BFDBFE">후아유</a><a href="#뉴발란스" class="nav-a" style="color:#15803D;background:#F0FDF4;border-color:#BBF7D0">뉴발란스</a><a href="#뉴발란스키즈" class="nav-a" style="color:#15803D;background:#F0FDF4;border-color:#BBF7D0">뉴발란스키즈</a><a href="#슈펜_오찌" class="nav-a" style="color:#B45309;background:#FFFBEB;border-color:#FDE68A">슈펜/오찌</a><a href="#미쏘" class="nav-a" style="color:#9D174D;background:#FDF2F8;border-color:#FBCFE8">미쏘</a><a href="#로엠" class="nav-a" style="color:#075985;background:#F0F9FF;border-color:#BAE6FD">로엠</a><a href="#클라비스_에블린" class="nav-a" style="color:#1F2937;background:#F9FAFB;border-color:#D1D5DB">클라비스/에블린</a></nav>
 
 <main class="main">
+
+<!-- 공유 저장소 설정 (관리자 전용) -->
+<div class="share-store-wrap" id="share-store-wrap">
+  <div class="share-store-status">
+    <span class="ssdot" id="jb-dot"></span>
+    <span id="jb-status-text" style="color:#92400E">공유 저장소 미연동 — 이 기기에서만 이미지 보임</span>
+  </div>
+  <div class="share-store-row">
+    <input type="text" class="share-store-inp" id="jb-key-inp"
+      placeholder="JSONBin.io Master Key 입력 → 연동하면 모든 방문자에게 이미지 공유">
+    <button class="share-store-btn" onclick="connectJB()">🔗 연동</button>
+    <button class="share-store-btn" style="background:#6B7280" onclick="openJBGuide()">?</button>
+  </div>
+</div>
+
 
 <div class="mode-bar" id="mode-bar">
   <span style="font-size:12px;font-weight:700;color:#374151">📋 보기 모드</span>
@@ -2912,7 +2951,6 @@ window.addEventListener('DOMContentLoaded', () => {
   lpInitAll();
   loadEditableContent();
   loadLinks();
-  loadImages();
 
   // [신규] 새로고침 후 색상 복원
   restoreColorStyles();                          // 즉시 복원 (깜빡임 방지)
@@ -4280,6 +4318,182 @@ function addImageByUrl(did) {
   srcEl.value = '';
   if (titleEl) titleEl.value = '';
 }
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// 공유 이미지 저장소 (JSONBin.io)
+// ─ 이미지 URL 목록을 클라우드에 공유 → 모든 방문자가 동일한 이미지 확인
+// ══════════════════════════════════════════════════════════════════════════
+
+const JSONBIN_BASE = 'https://api.jsonbin.io/v3/b';
+
+function getJBKey()   { return localStorage.getItem('jb-master-key') || ''; }
+function getJBBin()   { return localStorage.getItem('jb-bin-id')     || ''; }
+
+/** 공유 저장소에서 전체 이미지 데이터 읽기 (인증 불필요 - 공개 bin) */
+async function jbRead() {
+  const binId = getJBBin();
+  if (!binId) return null;
+  try {
+    const res = await fetch(`${JSONBIN_BASE}/${binId}/latest`, {
+      headers: { 'X-JSON-Privacy': 'false' }
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.record || {};
+  } catch(e) { return null; }
+}
+
+/** 공유 저장소에 이미지 데이터 저장 (관리자 키 필요) */
+async function jbWrite(data) {
+  const key   = getJBKey();
+  const binId = getJBBin();
+  if (!key || !binId) return false;
+  try {
+    const res = await fetch(`${JSONBIN_BASE}/${binId}`, {
+      method:  'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Master-Key': key,
+        'X-Bin-Versioning': 'false'
+      },
+      body: JSON.stringify(data)
+    });
+    return res.ok;
+  } catch(e) { return false; }
+}
+
+/** 공유 저장소 초기 생성 */
+async function jbCreate(key) {
+  try {
+    const res = await fetch(JSONBIN_BASE, {
+      method:  'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Master-Key':   key,
+        'X-Bin-Name':     'eland-portfolio-images',
+        'X-Bin-Private':  'false'   // 공개 읽기 허용
+      },
+      body: JSON.stringify({})
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.metadata?.id || null;
+  } catch(e) { return null; }
+}
+
+/** 공유 저장소 설정 저장 */
+async function saveJBSettings(key, binId) {
+  localStorage.setItem('jb-master-key', key);
+  localStorage.setItem('jb-bin-id',     binId);
+  updateShareStoreUI();
+}
+
+/** 공유 저장소 연동 버튼 */
+async function connectJB() {
+  const keyEl = document.getElementById('jb-key-inp');
+  const key   = keyEl ? keyEl.value.trim() : '';
+  if (!key) { alert('Master Key를 입력해주세요.'); return; }
+
+  const statusEl = document.getElementById('jb-status-text');
+  if (statusEl) statusEl.textContent = '연동 중...';
+
+  // 기존 bin ID 확인
+  let binId = getJBBin();
+  if (!binId) {
+    // 새 bin 생성
+    binId = await jbCreate(key);
+    if (!binId) { alert('연동 실패: Master Key를 확인해주세요.'); return; }
+  }
+
+  await saveJBSettings(key, binId);
+  alert('✅ 공유 저장소 연동 완료!\n이제 이미지를 업로드하면 모든 방문자에게 표시됩니다.');
+
+  // 기존 로컬 이미지를 공유 저장소로 마이그레이션
+  await migrateLocalToCloud();
+}
+
+/** 공유 저장소 가이드 */
+function openJBGuide() {
+  alert(
+    '📋 공유 저장소 설정 방법 (JSONBin.io)\n\n' +
+    '① jsonbin.io 접속 → 무료 회원가입 (구글 로그인 가능)\n' +
+    '② 우측 상단 → "API Keys" 클릭\n' +
+    '③ "Master Key" 복사\n' +
+    '④ 아래 입력란에 붙여넣기 → "연동" 클릭\n\n' +
+    '연동하면 이미지가 클라우드에 저장되어\n' +
+    '모든 방문자가 새로고침 후 동일한 이미지를 볼 수 있습니다.'
+  );
+}
+
+/** 로컬 이미지 → 공유 저장소 마이그레이션 */
+async function migrateLocalToCloud() {
+  const dids = ['d01','d02','d03','d04','d05','d06','d07',
+                'd08','d09','d10','d11','d12','d13','d14'];
+  const cloudData = (await jbRead()) || {};
+  let changed = false;
+  for (const did of dids) {
+    const local = getState(did).images;
+    if (local.length) {
+      cloudData[did] = local;
+      changed = true;
+    }
+  }
+  if (changed) await jbWrite(cloudData);
+}
+
+/** 공유 저장소에서 모든 이미지 로드 */
+async function loadSharedImages() {
+  const data = await jbRead();
+  if (!data) return false;
+  const dids = Object.keys(data);
+  let loaded = false;
+  for (const did of dids) {
+    const imgs = data[did];
+    if (Array.isArray(imgs) && imgs.length) {
+      getState(did).images = imgs;
+      getState(did).cur    = 0;
+      renderSlideshow(did);
+      loaded = true;
+    }
+  }
+  return loaded;
+}
+
+/** 공유 저장소 UI 상태 갱신 */
+function updateShareStoreUI() {
+  const key   = getJBKey();
+  const binId = getJBBin();
+  const ok    = !!(key && binId);
+  const dot   = document.getElementById('jb-dot');
+  const label = document.getElementById('jb-status-text');
+  const keyEl = document.getElementById('jb-key-inp');
+  if (dot)   dot.className   = 'ssdot ' + (ok ? 'on' : '');
+  if (label) {
+    label.textContent = ok
+      ? '🌐 공유 저장소 연동됨 — 모든 방문자에게 이미지 표시'
+      : '공유 저장소 미연동 — 이 기기에서만 이미지 보임';
+    label.style.color = ok ? '#059669' : '#92400E';
+  }
+  if (keyEl && !keyEl.value) keyEl.value = key;
+}
+
+// ── saveImages 오버라이드: IndexedDB + 공유 저장소 동시 저장 ──────────
+const _origSaveImages = saveImages;
+saveImages = async function(did) {
+  await _origSaveImages(did);   // IndexedDB 저장
+  // 공유 저장소가 연동되어 있으면 함께 저장
+  if (getJBKey() && getJBBin()) {
+    try {
+      const dot = document.getElementById('jb-dot');
+      if (dot) { dot.className = 'ssdot sync'; }
+      const data = (await jbRead()) || {};
+      data[did] = getState(did).images;
+      await jbWrite(data);
+      if (dot) { dot.className = 'ssdot on'; }
+    } catch(e) { console.warn('공유 저장소 저장 실패:', e); }
+  }
+};
 
 </script>
 
