@@ -383,33 +383,288 @@ body.non-admin .cloud-setup-wrap{display:none}
 body.non-admin .share-store-wrap{display:none}
 body.non-admin .cloud-setup-wrap{display:none}
 
-/* ─ GitHub 연동 상태 표시 ─ */
-#gh-status-bar{
-  display:none;align-items:center;gap:8px;padding:7px 16px;
-  font-size:11px;font-weight:600;border-radius:0;
-  border-bottom:2px solid transparent;transition:all .3s
-}
-#gh-status-bar.idle   {display:flex;background:#F0FDF4;border-color:#BBF7D0;color:#166534}
-#gh-status-bar.saving {display:flex;background:#FEF9C3;border-color:#FDE047;color:#713F12}
-#gh-status-bar.error  {display:flex;background:#FEF2F2;border-color:#FECACA;color:#991B1B}
-.gh-spinner{width:12px;height:12px;border:2px solid currentColor;
-  border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite;flex-shrink:0}
-/* GitHub 설정 패널 */
-.gh-setup-panel{
-  background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;
-  padding:16px;margin-bottom:16px
-}
-.gh-setup-row{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
-.gh-inp{flex:1;min-width:120px;border:1px solid #CBD5E1;border-radius:6px;
-  padding:6px 10px;font-size:12px;font-family:inherit}
-.gh-inp:focus{outline:none;border-color:#2563EB}
-.gh-btn{background:#24292F;color:#fff;border:none;border-radius:6px;
-  padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
-.gh-btn:hover{background:#444}
-.gh-btn-sm{padding:5px 10px;font-size:11px}
-body.non-admin .gh-setup-panel{display:none}
-body.non-admin #gh-status-bar{display:none}
+
+/* ── Firebase 연동 설정 ─────────────────────────────────────────────── */
+.fb-cfg-wrap{background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;
+  padding:10px 14px;margin-bottom:10px;font-size:12px}
+.fb-cfg-row{display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap}
+.fb-cfg-inp{flex:1;min-width:0;border:1px solid #FED7AA;border-radius:5px;
+  padding:5px 8px;font-size:11px;font-family:monospace}
+.fb-cfg-inp:focus{outline:none;border-color:#EA580C}
+.fb-cfg-btn{background:#EA580C;color:#fff;border:none;border-radius:5px;
+  padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap}
+.fb-cfg-btn:hover{background:#C2410C}
+.fb-cfg-status{display:flex;align-items:center;gap:5px;font-size:11px}
+.fb-cfg-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;background:#D1D5DB}
+.fb-cfg-dot.on{background:#059669;box-shadow:0 0 0 2px rgba(5,150,105,.2)}
+/* 포트폴리오 이미지 공유 표시 */
+.share-mode-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;
+  font-weight:700;padding:2px 7px;border-radius:10px;vertical-align:middle;margin-left:6px}
+.share-mode-badge.cloud{background:#DBEAFE;color:#1E40AF}
+.share-mode-badge.local{background:#F1F5F9;color:#6B7280}
+/* 이미지 업로드 진행 */
+.img-upload-prog{display:none;font-size:11px;color:#0284C7;margin-top:5px;
+  align-items:center;gap:5px;font-weight:600}
+.img-upload-prog.show{display:flex}
+.img-spin{width:12px;height:12px;border:2px solid #BAE6FD;border-top-color:#0284C7;
+  border-radius:50%;animation:spin .6s linear infinite;flex-shrink:0}
+/* 비관리자: Firebase 설정 숨김 */
+body.non-admin .fb-cfg-wrap{display:none!important}
 </style>
+<!-- Firebase SDK (실시간 이미지 공유) -->
+<script type="module">
+import { initializeApp }       from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getDatabase, ref, set, onValue, get }
+  from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+
+let _app = null, _db = null, _listeners = {};
+
+function getCfg() {
+  try { return JSON.parse(localStorage.getItem('fb-config') || 'null'); } catch(e) { return null; }
+}
+
+window._fbReady = false;
+
+window.fbInit = function() {
+  const cfg = getCfg();
+  if (!cfg?.apiKey || !cfg?.databaseURL) return false;
+  try {
+    if (!_app) { _app = initializeApp(cfg); _db = getDatabase(_app); }
+    window._fbReady = true;
+    return true;
+  } catch(e) { console.warn('fbInit 오류:', e); return false; }
+};
+
+/** 디자이너 이미지 배열 저장 */
+window.fbSaveImages = async function(did, images) {
+  if (!_db) return;
+  // base64 이미지는 URL로 변환 필요 - URL만 저장 (imgBB 업로드 후)
+  const urls = images.map(img => ({ src: img.src, name: img.name || '', cloud: !!img.cloud }));
+  await set(ref(_db, 'portfolio/' + did), urls);
+};
+
+/** 디자이너 이미지 실시간 구독 */
+window.fbListenImages = function(did, cb) {
+  if (!_db) return;
+  if (_listeners[did]) return; // 중복 구독 방지
+  _listeners[did] = onValue(ref(_db, 'portfolio/' + did), snap => {
+    const data = snap.val();
+    cb(Array.isArray(data) ? data : []);
+  });
+};
+
+/** 전체 이미지 1회 읽기 */
+window.fbLoadAllImages = async function() {
+  if (!_db) return null;
+  const snap = await get(ref(_db, 'portfolio'));
+  return snap.val();
+};
+
+// 페이지 로드 후 자동 초기화
+window.addEventListener('DOMContentLoaded', () => {
+  if (window.fbInit()) {
+    window._fbReady = true;
+    window.onFBReady?.();
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// Firebase 이미지 실시간 공유
+// 관리자 업로드 → imgBB → Firebase → 모든 방문자 실시간 표시
+// ══════════════════════════════════════════════════════════════════════════
+
+function getFBCfg() {
+  try { return JSON.parse(localStorage.getItem('fb-config') || 'null'); } catch(e) { return null; }
+}
+
+/** Firebase 이미지 연동 설정 */
+async function connectFBImages(did) {
+  const inp = document.getElementById('fb-inp-' + did);
+  const raw = inp?.value.trim();
+  if (!raw) { alert('Firebase config JSON을 입력해주세요.\n우측 ? 버튼을 눌러 발급 방법을 확인하세요.'); return; }
+  try {
+    const cfg = JSON.parse(raw);
+    if (!cfg.apiKey || !cfg.databaseURL) throw new Error('apiKey 와 databaseURL 이 필요합니다.');
+    // 전체 저장 (모든 디자이너 공유)
+    localStorage.setItem('fb-config', JSON.stringify(cfg));
+    // Firebase 초기화
+    if (!window.fbInit?.()) throw new Error('Firebase 초기화 실패');
+    // 모든 디자이너 UI 갱신
+    updateAllFBUI();
+    // 현재 로컬 이미지 → Firebase 마이그레이션
+    await migrateAllToFB();
+    // 실시간 구독 시작
+    startFBListeners();
+    alert('✅ 연동 완료!\n이후 이미지 업로드 시 모든 방문자에게 실시간으로 표시됩니다.');
+  } catch(e) {
+    alert('연동 실패: ' + e.message);
+  }
+}
+
+function openFBGuide() {
+  alert(
+    '📋 Firebase 무료 설정 (5분)\n\n' +
+    '① console.firebase.google.com 접속\n' +
+    '② 새 프로젝트 만들기\n' +
+    '③ 프로젝트 → Realtime Database → 만들기\n' +
+    '   → 테스트 모드 선택\n' +
+    '④ 프로젝트 설정(⚙️) → 내 앱 → 웹앱 추가 (</> 클릭)\n' +
+    '⑤ firebaseConfig 객체 전체 복사\n' +
+    '   (apiKey, databaseURL 포함 확인)\n' +
+    '⑥ 입력창에 붙여넣기 → 연동 클릭\n\n' +
+    '✅ 무료 플랜으로 충분합니다\n' +
+    '✅ 한 번 설정하면 모든 디자이너에 자동 적용'
+  );
+}
+
+/** 모든 디자이너 Firebase UI 상태 갱신 */
+function updateAllFBUI() {
+  const cfg   = getFBCfg();
+  const ready = !!(cfg && window._fbReady);
+  const dids  = ['d01','d02','d03','d04','d05','d06','d07',
+                 'd08','d09','d10','d11','d12','d13','d14'];
+  dids.forEach(did => {
+    const dot   = document.getElementById('fb-dot-'  + did);
+    const text  = document.getElementById('fb-text-' + did);
+    const badge = document.getElementById('img-mode-' + did);
+    const inp   = document.getElementById('fb-inp-'  + did);
+    const wrap  = document.getElementById('fb-cfg-'  + did);
+    if (dot)   dot.className = 'fb-cfg-dot ' + (ready ? 'on' : '');
+    if (text)  {
+      text.textContent = ready
+        ? '🌐 실시간 공유 활성화 — 모든 방문자에게 이미지가 동일하게 표시됩니다'
+        : '이미지 실시간 공유 미설정 — 이 기기에서만 보임';
+      text.style.color = ready ? '#059669' : '#92400E';
+    }
+    if (badge) {
+      badge.textContent  = ready ? '🌐 실시간' : '💾 로컬';
+      badge.className = 'share-mode-badge ' + (ready ? 'cloud' : 'local');
+    }
+    if (inp && cfg) {
+      try { inp.value = JSON.stringify(cfg, null, 2); } catch(e) {}
+    }
+    // 연동됐으면 설정창 접기
+    if (wrap && ready) {
+      const textarea = wrap.querySelector('textarea');
+      const btnRow   = wrap.querySelector('.fb-cfg-row');
+      if (textarea) textarea.style.display = 'none';
+      if (btnRow)   btnRow.style.display   = 'none';
+    }
+  });
+}
+
+/** 로컬(IndexedDB) 이미지 → Firebase 마이그레이션 */
+async function migrateAllToFB() {
+  if (!window.fbSaveImages) return;
+  const dids = ['d01','d02','d03','d04','d05','d06','d07',
+                'd08','d09','d10','d11','d12','d13','d14'];
+  for (const did of dids) {
+    const imgs = getState(did).images;
+    if (imgs.length) {
+      try { await window.fbSaveImages(did, imgs); } catch(e) {}
+    }
+  }
+}
+
+/** Firebase 실시간 구독 시작 (모든 디자이너) */
+function startFBListeners() {
+  if (!window.fbListenImages) return;
+  const dids = ['d01','d02','d03','d04','d05','d06','d07',
+                'd08','d09','d10','d11','d12','d13','d14'];
+  dids.forEach(did => {
+    window.fbListenImages(did, images => {
+      if (!images.length) return;
+      const st = getState(did);
+      st.images = images;
+      st.cur    = 0;
+      renderSlideshow(did);
+    });
+  });
+}
+
+/** saveImages 오버라이드: IndexedDB + Firebase 동시 저장 */
+const __origSaveImages = saveImages;
+saveImages = async function(did) {
+  await __origSaveImages(did);
+  if (window._fbReady && window.fbSaveImages) {
+    try {
+      const prog     = document.getElementById('img-prog-' + did);
+      const progText = document.getElementById('img-prog-text-' + did);
+      if (prog) prog.classList.add('show');
+      if (progText) progText.textContent = '클라우드 저장 중...';
+      await window.fbSaveImages(did, getState(did).images);
+      if (prog) prog.classList.remove('show');
+    } catch(e) { console.warn('Firebase 이미지 저장 실패:', e); }
+  }
+};
+
+/** addImages 오버라이드: 클라우드 업로드 후 Firebase 저장 */
+const __origAddImages = addImages;
+addImages = function(did, input) {
+  const files = Array.from(input.files);
+  if (!files.length) return;
+  input.value = '';
+
+  const prog     = document.getElementById('img-prog-' + did);
+  const progText = document.getElementById('img-prog-text-' + did);
+  const apiKey   = getApiKey(); // imgBB API Key
+  let processed  = 0;
+
+  if (apiKey && window._fbReady) {
+    // 클라우드 업로드 모드 (imgBB → Firebase)
+    if (prog) prog.classList.add('show');
+    files.forEach(file => {
+      compressImage(file, async compressed => {
+        try {
+          if (progText) progText.textContent = `업로드 중... (${file.name})`;
+          const url = await uploadToCloud(compressed.src, file.name);
+          getState(did).images.push({ src: url, name: file.name, cloud: true });
+        } catch(e) {
+          getState(did).images.push({ src: compressed.src, name: file.name });
+        } finally {
+          processed++;
+          if (processed === files.length) {
+            if (prog) prog.classList.remove('show');
+            saveImages(did); // Firebase + IndexedDB 동시 저장
+            renderSlideshow(did);
+          }
+        }
+      });
+    });
+  } else {
+    // 로컬 모드 (IndexedDB만)
+    files.forEach(file => {
+      compressImage(file, compressed => {
+        getState(did).images.push({ src: compressed.src, name: file.name });
+        processed++;
+        if (processed === files.length) {
+          saveImages(did);
+          renderSlideshow(did);
+        }
+      });
+    });
+  }
+};
+
+/** Firebase 준비 완료 시 콜백 */
+window.onFBReady = function() {
+  updateAllFBUI();
+  startFBListeners();
+};
+
+/** 초기화 */
+function initFBImages() {
+  const cfg = getFBCfg();
+  if (cfg && window._fbReady) {
+    updateAllFBUI();
+    startFBListeners();
+  } else if (cfg) {
+    // 아직 fbInit 안 됐으면 module 로드 완료 후 처리 (onFBReady 콜백)
+    updateAllFBUI();
+  }
+}
+
+</script>
 </head>
 <body>
 
@@ -444,14 +699,15 @@ body.non-admin #gh-status-bar{display:none}
 <nav><a href="#summary" class="nav-a report-only" style="color:#374151;background:#F1F5F9;border-color:#E2E8F0">📋 전체 요약</a><a href="#스파오" class="nav-a" style="color:#C0392B;background:#FFF5F3;border-color:#FECACA">스파오</a><a href="#후아유" class="nav-a" style="color:#1D4ED8;background:#EFF6FF;border-color:#BFDBFE">후아유</a><a href="#뉴발란스" class="nav-a" style="color:#15803D;background:#F0FDF4;border-color:#BBF7D0">뉴발란스</a><a href="#뉴발란스키즈" class="nav-a" style="color:#15803D;background:#F0FDF4;border-color:#BBF7D0">뉴발란스키즈</a><a href="#슈펜_오찌" class="nav-a" style="color:#B45309;background:#FFFBEB;border-color:#FDE68A">슈펜/오찌</a><a href="#미쏘" class="nav-a" style="color:#9D174D;background:#FDF2F8;border-color:#FBCFE8">미쏘</a><a href="#로엠" class="nav-a" style="color:#075985;background:#F0F9FF;border-color:#BAE6FD">로엠</a><a href="#클라비스_에블린" class="nav-a" style="color:#1F2937;background:#F9FAFB;border-color:#D1D5DB">클라비스/에블린</a></nav>
 
 
-<!-- GitHub 연동 상태 표시 -->
-<div id="gh-status-bar">
-  <div class="gh-spinner" id="gh-spinner" style="display:none"></div>
-  <span id="gh-status-text">✓ GitHub 연동됨</span>
-  <span id="gh-last-saved" style="opacity:.6;font-weight:400"></span>
-</div>
+
 <main class="main">
 
+<!-- 공유 저장소 설정 (관리자 전용) -->
+<div class="share-store-wrap" id="share-store-wrap">
+  <div class="share-store-status">
+    <span class="ssdot" id="jb-dot"></span>
+    <span id="jb-status-text" style="color:#92400E">공유 저장소 미연동 — 이 기기에서만 이미지 보임</span>
+  </div>
   <div class="share-store-row">
     <input type="text" class="share-store-inp" id="jb-key-inp"
       placeholder="GitHub Personal Access Token 입력 (gist 권한 필요)">
@@ -478,25 +734,6 @@ body.non-admin #gh-status-bar{display:none}
     <button class="admin-menu-btn" id="admin-pw-btn" style="display:none" onclick="openPwChange()">🔑 비밀번호 변경</button>
     <button class="admin-menu-btn" id="admin-login-btn" onclick="openAdminModal('report')">🔐 관리자 로그인</button>
   </div>
-</div>
-
-<!-- GitHub 설정 패널 (관리자 전용) -->
-<div class="gh-setup-panel" id="gh-setup-panel">
-  <div style="font-size:13px;font-weight:700;margin-bottom:4px">
-    ☁️ GitHub 연동 — 변경사항을 모든 방문자에게 자동 반영
-  </div>
-  <div style="font-size:11px;color:#64748B;margin-bottom:8px">
-    토큰·저장소 입력 후 연동하면 이미지·텍스트 수정 내용이 GitHub에 자동 저장됩니다.
-  </div>
-  <div class="gh-setup-row">
-    <input class="gh-inp" id="gh-token-inp"  type="password" placeholder="GitHub Personal Access Token (repo 권한)">
-    <input class="gh-inp" id="gh-owner-inp"  type="text"     placeholder="GitHub 사용자명 (예: elandworld)">
-    <input class="gh-inp" id="gh-repo-inp"   type="text"     placeholder="저장소명 (예: portfolio)">
-    <input class="gh-inp" id="gh-branch-inp" type="text"     placeholder="브랜치 (기본: main)" style="max-width:120px">
-    <button class="gh-btn gh-btn-sm" onclick="connectGitHub()">🔗 연동</button>
-    <button class="gh-btn gh-btn-sm" style="background:#6B7280" onclick="openGHGuide()">?</button>
-  </div>
-  <div id="gh-setup-status" style="font-size:11px;color:#64748B;margin-top:6px"></div>
 </div>
 <div class="edit-mode-bar" style="display:none" id="edit-mode-bar-legacy">
   ✏️ <strong>편집 모드 활성화</strong> — 텍스트 클릭 시 바로 수정 가능. <b>📥 파일로 저장</b>을 눌러야 다음에 열어도 유지됩니다. &nbsp;
@@ -1302,8 +1539,31 @@ body.non-admin #gh-status-bar{display:none}
   </div>
 </div>
 <div class="d-slides-wrap">
+    <!-- Firebase 이미지 공유 설정 -->
+    <div class="fb-cfg-wrap" id="fb-cfg-d01">
+      <div class="fb-cfg-status">
+        <span class="fb-cfg-dot" id="fb-dot-d01"></span>
+        <span id="fb-text-d01" style="color:#92400E">이미지 실시간 공유 미설정 — 이 기기에서만 보임</span>
+      </div>
+      <div class="fb-cfg-row">
+        <textarea id="fb-inp-d01" class="fb-cfg-inp" rows="2"
+          placeholder="Firebase config JSON 붙여넣기 → 연동하면 이미지가 모든 방문자에게 실시간 표시됩니다"
+          style="resize:none"></textarea>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <button class="fb-cfg-btn" onclick="connectFBImages('d01')">🔥 연동</button>
+          <button class="fb-cfg-btn" style="background:#6B7280;font-size:10px" onclick="openFBGuide()">?</button>
+        </div>
+      </div>
+    </div>
+    <div class="img-upload-prog" id="img-prog-d01">
+      <div class="img-spin"></div>
+      <span id="img-prog-text-d01">클라우드 업로드 중...</span>
+    </div>
     <div class="slides-header">
-      <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+      <div style="display:flex;align-items:center;gap:0;flex:1">
+        <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+        <span class="share-mode-badge local" id="img-mode-d01">💾 로컬</span>
+      </div>
       <div class="cloud-setup-wrap" id="cloud-wrap-d01">
         <div class="cloud-status">
           <span class="cloud-dot" id="cloud-dot-d01"></span>
@@ -1403,8 +1663,31 @@ body.non-admin #gh-status-bar{display:none}
   </div>
 </div>
 <div class="d-slides-wrap">
+    <!-- Firebase 이미지 공유 설정 -->
+    <div class="fb-cfg-wrap" id="fb-cfg-d02">
+      <div class="fb-cfg-status">
+        <span class="fb-cfg-dot" id="fb-dot-d02"></span>
+        <span id="fb-text-d02" style="color:#92400E">이미지 실시간 공유 미설정 — 이 기기에서만 보임</span>
+      </div>
+      <div class="fb-cfg-row">
+        <textarea id="fb-inp-d02" class="fb-cfg-inp" rows="2"
+          placeholder="Firebase config JSON 붙여넣기 → 연동하면 이미지가 모든 방문자에게 실시간 표시됩니다"
+          style="resize:none"></textarea>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <button class="fb-cfg-btn" onclick="connectFBImages('d02')">🔥 연동</button>
+          <button class="fb-cfg-btn" style="background:#6B7280;font-size:10px" onclick="openFBGuide()">?</button>
+        </div>
+      </div>
+    </div>
+    <div class="img-upload-prog" id="img-prog-d02">
+      <div class="img-spin"></div>
+      <span id="img-prog-text-d02">클라우드 업로드 중...</span>
+    </div>
     <div class="slides-header">
-      <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+      <div style="display:flex;align-items:center;gap:0;flex:1">
+        <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+        <span class="share-mode-badge local" id="img-mode-d02">💾 로컬</span>
+      </div>
       <div class="cloud-setup-wrap" id="cloud-wrap-d02">
         <div class="cloud-status">
           <span class="cloud-dot" id="cloud-dot-d02"></span>
@@ -1505,8 +1788,31 @@ body.non-admin #gh-status-bar{display:none}
   </div>
 </div>
 <div class="d-slides-wrap">
+    <!-- Firebase 이미지 공유 설정 -->
+    <div class="fb-cfg-wrap" id="fb-cfg-d03">
+      <div class="fb-cfg-status">
+        <span class="fb-cfg-dot" id="fb-dot-d03"></span>
+        <span id="fb-text-d03" style="color:#92400E">이미지 실시간 공유 미설정 — 이 기기에서만 보임</span>
+      </div>
+      <div class="fb-cfg-row">
+        <textarea id="fb-inp-d03" class="fb-cfg-inp" rows="2"
+          placeholder="Firebase config JSON 붙여넣기 → 연동하면 이미지가 모든 방문자에게 실시간 표시됩니다"
+          style="resize:none"></textarea>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <button class="fb-cfg-btn" onclick="connectFBImages('d03')">🔥 연동</button>
+          <button class="fb-cfg-btn" style="background:#6B7280;font-size:10px" onclick="openFBGuide()">?</button>
+        </div>
+      </div>
+    </div>
+    <div class="img-upload-prog" id="img-prog-d03">
+      <div class="img-spin"></div>
+      <span id="img-prog-text-d03">클라우드 업로드 중...</span>
+    </div>
     <div class="slides-header">
-      <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+      <div style="display:flex;align-items:center;gap:0;flex:1">
+        <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+        <span class="share-mode-badge local" id="img-mode-d03">💾 로컬</span>
+      </div>
       <div class="cloud-setup-wrap" id="cloud-wrap-d03">
         <div class="cloud-status">
           <span class="cloud-dot" id="cloud-dot-d03"></span>
@@ -1606,8 +1912,31 @@ body.non-admin #gh-status-bar{display:none}
   </div>
 </div>
 <div class="d-slides-wrap">
+    <!-- Firebase 이미지 공유 설정 -->
+    <div class="fb-cfg-wrap" id="fb-cfg-d04">
+      <div class="fb-cfg-status">
+        <span class="fb-cfg-dot" id="fb-dot-d04"></span>
+        <span id="fb-text-d04" style="color:#92400E">이미지 실시간 공유 미설정 — 이 기기에서만 보임</span>
+      </div>
+      <div class="fb-cfg-row">
+        <textarea id="fb-inp-d04" class="fb-cfg-inp" rows="2"
+          placeholder="Firebase config JSON 붙여넣기 → 연동하면 이미지가 모든 방문자에게 실시간 표시됩니다"
+          style="resize:none"></textarea>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <button class="fb-cfg-btn" onclick="connectFBImages('d04')">🔥 연동</button>
+          <button class="fb-cfg-btn" style="background:#6B7280;font-size:10px" onclick="openFBGuide()">?</button>
+        </div>
+      </div>
+    </div>
+    <div class="img-upload-prog" id="img-prog-d04">
+      <div class="img-spin"></div>
+      <span id="img-prog-text-d04">클라우드 업로드 중...</span>
+    </div>
     <div class="slides-header">
-      <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+      <div style="display:flex;align-items:center;gap:0;flex:1">
+        <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+        <span class="share-mode-badge local" id="img-mode-d04">💾 로컬</span>
+      </div>
       <div class="cloud-setup-wrap" id="cloud-wrap-d04">
         <div class="cloud-status">
           <span class="cloud-dot" id="cloud-dot-d04"></span>
@@ -1718,8 +2047,31 @@ body.non-admin #gh-status-bar{display:none}
   </div>
 </div>
 <div class="d-slides-wrap">
+    <!-- Firebase 이미지 공유 설정 -->
+    <div class="fb-cfg-wrap" id="fb-cfg-d05">
+      <div class="fb-cfg-status">
+        <span class="fb-cfg-dot" id="fb-dot-d05"></span>
+        <span id="fb-text-d05" style="color:#92400E">이미지 실시간 공유 미설정 — 이 기기에서만 보임</span>
+      </div>
+      <div class="fb-cfg-row">
+        <textarea id="fb-inp-d05" class="fb-cfg-inp" rows="2"
+          placeholder="Firebase config JSON 붙여넣기 → 연동하면 이미지가 모든 방문자에게 실시간 표시됩니다"
+          style="resize:none"></textarea>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <button class="fb-cfg-btn" onclick="connectFBImages('d05')">🔥 연동</button>
+          <button class="fb-cfg-btn" style="background:#6B7280;font-size:10px" onclick="openFBGuide()">?</button>
+        </div>
+      </div>
+    </div>
+    <div class="img-upload-prog" id="img-prog-d05">
+      <div class="img-spin"></div>
+      <span id="img-prog-text-d05">클라우드 업로드 중...</span>
+    </div>
     <div class="slides-header">
-      <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+      <div style="display:flex;align-items:center;gap:0;flex:1">
+        <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+        <span class="share-mode-badge local" id="img-mode-d05">💾 로컬</span>
+      </div>
       <div class="cloud-setup-wrap" id="cloud-wrap-d05">
         <div class="cloud-status">
           <span class="cloud-dot" id="cloud-dot-d05"></span>
@@ -1829,8 +2181,31 @@ body.non-admin #gh-status-bar{display:none}
   </div>
 </div>
 <div class="d-slides-wrap">
+    <!-- Firebase 이미지 공유 설정 -->
+    <div class="fb-cfg-wrap" id="fb-cfg-d06">
+      <div class="fb-cfg-status">
+        <span class="fb-cfg-dot" id="fb-dot-d06"></span>
+        <span id="fb-text-d06" style="color:#92400E">이미지 실시간 공유 미설정 — 이 기기에서만 보임</span>
+      </div>
+      <div class="fb-cfg-row">
+        <textarea id="fb-inp-d06" class="fb-cfg-inp" rows="2"
+          placeholder="Firebase config JSON 붙여넣기 → 연동하면 이미지가 모든 방문자에게 실시간 표시됩니다"
+          style="resize:none"></textarea>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <button class="fb-cfg-btn" onclick="connectFBImages('d06')">🔥 연동</button>
+          <button class="fb-cfg-btn" style="background:#6B7280;font-size:10px" onclick="openFBGuide()">?</button>
+        </div>
+      </div>
+    </div>
+    <div class="img-upload-prog" id="img-prog-d06">
+      <div class="img-spin"></div>
+      <span id="img-prog-text-d06">클라우드 업로드 중...</span>
+    </div>
     <div class="slides-header">
-      <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+      <div style="display:flex;align-items:center;gap:0;flex:1">
+        <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+        <span class="share-mode-badge local" id="img-mode-d06">💾 로컬</span>
+      </div>
       <div class="cloud-setup-wrap" id="cloud-wrap-d06">
         <div class="cloud-status">
           <span class="cloud-dot" id="cloud-dot-d06"></span>
@@ -1930,8 +2305,31 @@ body.non-admin #gh-status-bar{display:none}
   </div>
 </div>
 <div class="d-slides-wrap">
+    <!-- Firebase 이미지 공유 설정 -->
+    <div class="fb-cfg-wrap" id="fb-cfg-d07">
+      <div class="fb-cfg-status">
+        <span class="fb-cfg-dot" id="fb-dot-d07"></span>
+        <span id="fb-text-d07" style="color:#92400E">이미지 실시간 공유 미설정 — 이 기기에서만 보임</span>
+      </div>
+      <div class="fb-cfg-row">
+        <textarea id="fb-inp-d07" class="fb-cfg-inp" rows="2"
+          placeholder="Firebase config JSON 붙여넣기 → 연동하면 이미지가 모든 방문자에게 실시간 표시됩니다"
+          style="resize:none"></textarea>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <button class="fb-cfg-btn" onclick="connectFBImages('d07')">🔥 연동</button>
+          <button class="fb-cfg-btn" style="background:#6B7280;font-size:10px" onclick="openFBGuide()">?</button>
+        </div>
+      </div>
+    </div>
+    <div class="img-upload-prog" id="img-prog-d07">
+      <div class="img-spin"></div>
+      <span id="img-prog-text-d07">클라우드 업로드 중...</span>
+    </div>
     <div class="slides-header">
-      <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+      <div style="display:flex;align-items:center;gap:0;flex:1">
+        <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+        <span class="share-mode-badge local" id="img-mode-d07">💾 로컬</span>
+      </div>
       <div class="cloud-setup-wrap" id="cloud-wrap-d07">
         <div class="cloud-status">
           <span class="cloud-dot" id="cloud-dot-d07"></span>
@@ -2031,8 +2429,31 @@ body.non-admin #gh-status-bar{display:none}
   </div>
 </div>
 <div class="d-slides-wrap">
+    <!-- Firebase 이미지 공유 설정 -->
+    <div class="fb-cfg-wrap" id="fb-cfg-d08">
+      <div class="fb-cfg-status">
+        <span class="fb-cfg-dot" id="fb-dot-d08"></span>
+        <span id="fb-text-d08" style="color:#92400E">이미지 실시간 공유 미설정 — 이 기기에서만 보임</span>
+      </div>
+      <div class="fb-cfg-row">
+        <textarea id="fb-inp-d08" class="fb-cfg-inp" rows="2"
+          placeholder="Firebase config JSON 붙여넣기 → 연동하면 이미지가 모든 방문자에게 실시간 표시됩니다"
+          style="resize:none"></textarea>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <button class="fb-cfg-btn" onclick="connectFBImages('d08')">🔥 연동</button>
+          <button class="fb-cfg-btn" style="background:#6B7280;font-size:10px" onclick="openFBGuide()">?</button>
+        </div>
+      </div>
+    </div>
+    <div class="img-upload-prog" id="img-prog-d08">
+      <div class="img-spin"></div>
+      <span id="img-prog-text-d08">클라우드 업로드 중...</span>
+    </div>
     <div class="slides-header">
-      <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+      <div style="display:flex;align-items:center;gap:0;flex:1">
+        <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+        <span class="share-mode-badge local" id="img-mode-d08">💾 로컬</span>
+      </div>
       <div class="cloud-setup-wrap" id="cloud-wrap-d08">
         <div class="cloud-status">
           <span class="cloud-dot" id="cloud-dot-d08"></span>
@@ -2142,8 +2563,31 @@ body.non-admin #gh-status-bar{display:none}
   </div>
 </div>
 <div class="d-slides-wrap">
+    <!-- Firebase 이미지 공유 설정 -->
+    <div class="fb-cfg-wrap" id="fb-cfg-d09">
+      <div class="fb-cfg-status">
+        <span class="fb-cfg-dot" id="fb-dot-d09"></span>
+        <span id="fb-text-d09" style="color:#92400E">이미지 실시간 공유 미설정 — 이 기기에서만 보임</span>
+      </div>
+      <div class="fb-cfg-row">
+        <textarea id="fb-inp-d09" class="fb-cfg-inp" rows="2"
+          placeholder="Firebase config JSON 붙여넣기 → 연동하면 이미지가 모든 방문자에게 실시간 표시됩니다"
+          style="resize:none"></textarea>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <button class="fb-cfg-btn" onclick="connectFBImages('d09')">🔥 연동</button>
+          <button class="fb-cfg-btn" style="background:#6B7280;font-size:10px" onclick="openFBGuide()">?</button>
+        </div>
+      </div>
+    </div>
+    <div class="img-upload-prog" id="img-prog-d09">
+      <div class="img-spin"></div>
+      <span id="img-prog-text-d09">클라우드 업로드 중...</span>
+    </div>
     <div class="slides-header">
-      <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+      <div style="display:flex;align-items:center;gap:0;flex:1">
+        <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+        <span class="share-mode-badge local" id="img-mode-d09">💾 로컬</span>
+      </div>
       <div class="cloud-setup-wrap" id="cloud-wrap-d09">
         <div class="cloud-status">
           <span class="cloud-dot" id="cloud-dot-d09"></span>
@@ -2243,8 +2687,31 @@ body.non-admin #gh-status-bar{display:none}
   </div>
 </div>
 <div class="d-slides-wrap">
+    <!-- Firebase 이미지 공유 설정 -->
+    <div class="fb-cfg-wrap" id="fb-cfg-d10">
+      <div class="fb-cfg-status">
+        <span class="fb-cfg-dot" id="fb-dot-d10"></span>
+        <span id="fb-text-d10" style="color:#92400E">이미지 실시간 공유 미설정 — 이 기기에서만 보임</span>
+      </div>
+      <div class="fb-cfg-row">
+        <textarea id="fb-inp-d10" class="fb-cfg-inp" rows="2"
+          placeholder="Firebase config JSON 붙여넣기 → 연동하면 이미지가 모든 방문자에게 실시간 표시됩니다"
+          style="resize:none"></textarea>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <button class="fb-cfg-btn" onclick="connectFBImages('d10')">🔥 연동</button>
+          <button class="fb-cfg-btn" style="background:#6B7280;font-size:10px" onclick="openFBGuide()">?</button>
+        </div>
+      </div>
+    </div>
+    <div class="img-upload-prog" id="img-prog-d10">
+      <div class="img-spin"></div>
+      <span id="img-prog-text-d10">클라우드 업로드 중...</span>
+    </div>
     <div class="slides-header">
-      <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+      <div style="display:flex;align-items:center;gap:0;flex:1">
+        <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+        <span class="share-mode-badge local" id="img-mode-d10">💾 로컬</span>
+      </div>
       <div class="cloud-setup-wrap" id="cloud-wrap-d10">
         <div class="cloud-status">
           <span class="cloud-dot" id="cloud-dot-d10"></span>
@@ -2355,8 +2822,31 @@ body.non-admin #gh-status-bar{display:none}
   </div>
 </div>
 <div class="d-slides-wrap">
+    <!-- Firebase 이미지 공유 설정 -->
+    <div class="fb-cfg-wrap" id="fb-cfg-d11">
+      <div class="fb-cfg-status">
+        <span class="fb-cfg-dot" id="fb-dot-d11"></span>
+        <span id="fb-text-d11" style="color:#92400E">이미지 실시간 공유 미설정 — 이 기기에서만 보임</span>
+      </div>
+      <div class="fb-cfg-row">
+        <textarea id="fb-inp-d11" class="fb-cfg-inp" rows="2"
+          placeholder="Firebase config JSON 붙여넣기 → 연동하면 이미지가 모든 방문자에게 실시간 표시됩니다"
+          style="resize:none"></textarea>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <button class="fb-cfg-btn" onclick="connectFBImages('d11')">🔥 연동</button>
+          <button class="fb-cfg-btn" style="background:#6B7280;font-size:10px" onclick="openFBGuide()">?</button>
+        </div>
+      </div>
+    </div>
+    <div class="img-upload-prog" id="img-prog-d11">
+      <div class="img-spin"></div>
+      <span id="img-prog-text-d11">클라우드 업로드 중...</span>
+    </div>
     <div class="slides-header">
-      <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+      <div style="display:flex;align-items:center;gap:0;flex:1">
+        <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+        <span class="share-mode-badge local" id="img-mode-d11">💾 로컬</span>
+      </div>
       <div class="cloud-setup-wrap" id="cloud-wrap-d11">
         <div class="cloud-status">
           <span class="cloud-dot" id="cloud-dot-d11"></span>
@@ -2466,8 +2956,31 @@ body.non-admin #gh-status-bar{display:none}
   </div>
 </div>
 <div class="d-slides-wrap">
+    <!-- Firebase 이미지 공유 설정 -->
+    <div class="fb-cfg-wrap" id="fb-cfg-d12">
+      <div class="fb-cfg-status">
+        <span class="fb-cfg-dot" id="fb-dot-d12"></span>
+        <span id="fb-text-d12" style="color:#92400E">이미지 실시간 공유 미설정 — 이 기기에서만 보임</span>
+      </div>
+      <div class="fb-cfg-row">
+        <textarea id="fb-inp-d12" class="fb-cfg-inp" rows="2"
+          placeholder="Firebase config JSON 붙여넣기 → 연동하면 이미지가 모든 방문자에게 실시간 표시됩니다"
+          style="resize:none"></textarea>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <button class="fb-cfg-btn" onclick="connectFBImages('d12')">🔥 연동</button>
+          <button class="fb-cfg-btn" style="background:#6B7280;font-size:10px" onclick="openFBGuide()">?</button>
+        </div>
+      </div>
+    </div>
+    <div class="img-upload-prog" id="img-prog-d12">
+      <div class="img-spin"></div>
+      <span id="img-prog-text-d12">클라우드 업로드 중...</span>
+    </div>
     <div class="slides-header">
-      <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+      <div style="display:flex;align-items:center;gap:0;flex:1">
+        <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+        <span class="share-mode-badge local" id="img-mode-d12">💾 로컬</span>
+      </div>
       <div class="cloud-setup-wrap" id="cloud-wrap-d12">
         <div class="cloud-status">
           <span class="cloud-dot" id="cloud-dot-d12"></span>
@@ -2578,8 +3091,31 @@ body.non-admin #gh-status-bar{display:none}
   </div>
 </div>
 <div class="d-slides-wrap">
+    <!-- Firebase 이미지 공유 설정 -->
+    <div class="fb-cfg-wrap" id="fb-cfg-d13">
+      <div class="fb-cfg-status">
+        <span class="fb-cfg-dot" id="fb-dot-d13"></span>
+        <span id="fb-text-d13" style="color:#92400E">이미지 실시간 공유 미설정 — 이 기기에서만 보임</span>
+      </div>
+      <div class="fb-cfg-row">
+        <textarea id="fb-inp-d13" class="fb-cfg-inp" rows="2"
+          placeholder="Firebase config JSON 붙여넣기 → 연동하면 이미지가 모든 방문자에게 실시간 표시됩니다"
+          style="resize:none"></textarea>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <button class="fb-cfg-btn" onclick="connectFBImages('d13')">🔥 연동</button>
+          <button class="fb-cfg-btn" style="background:#6B7280;font-size:10px" onclick="openFBGuide()">?</button>
+        </div>
+      </div>
+    </div>
+    <div class="img-upload-prog" id="img-prog-d13">
+      <div class="img-spin"></div>
+      <span id="img-prog-text-d13">클라우드 업로드 중...</span>
+    </div>
     <div class="slides-header">
-      <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+      <div style="display:flex;align-items:center;gap:0;flex:1">
+        <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+        <span class="share-mode-badge local" id="img-mode-d13">💾 로컬</span>
+      </div>
       <div class="cloud-setup-wrap" id="cloud-wrap-d13">
         <div class="cloud-status">
           <span class="cloud-dot" id="cloud-dot-d13"></span>
@@ -2690,8 +3226,31 @@ body.non-admin #gh-status-bar{display:none}
   </div>
 </div>
 <div class="d-slides-wrap">
+    <!-- Firebase 이미지 공유 설정 -->
+    <div class="fb-cfg-wrap" id="fb-cfg-d14">
+      <div class="fb-cfg-status">
+        <span class="fb-cfg-dot" id="fb-dot-d14"></span>
+        <span id="fb-text-d14" style="color:#92400E">이미지 실시간 공유 미설정 — 이 기기에서만 보임</span>
+      </div>
+      <div class="fb-cfg-row">
+        <textarea id="fb-inp-d14" class="fb-cfg-inp" rows="2"
+          placeholder="Firebase config JSON 붙여넣기 → 연동하면 이미지가 모든 방문자에게 실시간 표시됩니다"
+          style="resize:none"></textarea>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <button class="fb-cfg-btn" onclick="connectFBImages('d14')">🔥 연동</button>
+          <button class="fb-cfg-btn" style="background:#6B7280;font-size:10px" onclick="openFBGuide()">?</button>
+        </div>
+      </div>
+    </div>
+    <div class="img-upload-prog" id="img-prog-d14">
+      <div class="img-spin"></div>
+      <span id="img-prog-text-d14">클라우드 업로드 중...</span>
+    </div>
     <div class="slides-header">
-      <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+      <div style="display:flex;align-items:center;gap:0;flex:1">
+        <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+        <span class="share-mode-badge local" id="img-mode-d14">💾 로컬</span>
+      </div>
       <div class="cloud-setup-wrap" id="cloud-wrap-d14">
         <div class="cloud-status">
           <span class="cloud-dot" id="cloud-dot-d14"></span>
@@ -2842,7 +3401,6 @@ function restoreAllColors() {
 
 function saveAll() {
   document.querySelectorAll('[data-key]').forEach(el => saveKey(el.dataset.key, el.innerHTML));
-  saveToGitHub('수동 저장');
   const btn = event.target;
   btn.textContent = '✅ 저장됨';
   setTimeout(() => btn.textContent = '💾 저장', 1500);
@@ -2960,29 +3518,7 @@ function renderSlideshow(did) {
 
 // ── KEYBOARD ──────────────────────────────────────────────────────────────
 document.addEventListener('keydown', e => {
-  // ESC: 열려있는 모달/라이트박스 닫기
-  if (e.key === 'Escape') {
-    const adminModal = document.getElementById('admin-modal');
-    const pwModal    = document.getElementById('pw-change-modal');
-    const lbEl       = document.getElementById('lightbox');
-    if (adminModal?.classList.contains('open'))  { adminModalClose(); return; }
-    if (pwModal?.style.display === 'flex')       { pwModal.style.display = 'none'; return; }
-    if (lbEl?.classList.contains('open'))        { lbClose(); return; }
-    return;
-  }
-  // 모달 열려있으면 다른 단축키 모두 차단
-  if (document.getElementById('admin-modal')?.classList.contains('open')) return;
-  if (document.getElementById('pw-change-modal')?.style.display === 'flex') return;
-  // 입력 중이면 단축키 차단
-  const ae = document.activeElement;
-  if (ae && (ae.isContentEditable || ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) return;
-  // 라이트박스 화살표 키
-  if (LB_DID) {
-    if (e.key === 'ArrowRight') { lbNav(1); return; }
-    if (e.key === 'ArrowLeft')  { lbNav(-1); return; }
-    return;
-  }
-  // 슬라이드쇼 화살표 키
+  if (document.activeElement && document.activeElement.isContentEditable) return;
   if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
   for (const card of document.querySelectorAll('.d-card')) {
     const r = card.getBoundingClientRect();
@@ -3022,18 +3558,12 @@ window.addEventListener('DOMContentLoaded', () => {
   loadEditableContent();
   loadLinks();
 
-  loadImages();   // 이미지 로드
-
-  // 색상 복원
-  restoreColorStyles();
+  // [신규] 새로고침 후 색상 복원
+  restoreColorStyles();                          // 즉시 복원 (깜빡임 방지)
   requestAnimationFrame(() => restoreAllColors());
-
-  // imgBB API Key 자동 세팅
+  // API Key 자동 세팅
   if (!localStorage.getItem('imgbb-api-key')) localStorage.setItem('imgbb-api-key', '651d655972b22a46089b521b347dff8b');
-  updateCloudUI();
-
-  // GitHub 연동 초기화 (관리자만)
-  if (isAdmin()) initGHSetup();
+  updateCloudUI(); // 클라우드 상태 UI 갱신 // 재계산 후 확정
 });
 
 // ── 링크 관리 시스템 ────────────────────────────────────────────────────────
@@ -3048,7 +3578,6 @@ function lpGetData(did) {
 
 function lpSave(did, data) {
   try { localStorage.setItem('lp-data-' + did, JSON.stringify(data)); } catch(e) {}
-  scheduleGHSave('링크 업데이트');
 }
 
 function lpRender(did) {
@@ -3385,16 +3914,14 @@ document.addEventListener('keydown', e => {
 
 // 터치 스와이프 지원
 let LB_TOUCH_X = null;
-document.addEventListener('DOMContentLoaded', () => {
-  const lbEl = document.getElementById('lightbox');
-  if (!lbEl) return;
-  lbEl.addEventListener('touchstart', e => { LB_TOUCH_X = e.touches[0].clientX; }, {passive:true});
-  lbEl.addEventListener('touchend', e => {
-    if (LB_TOUCH_X === null) return;
-    const dx = e.changedTouches[0].clientX - LB_TOUCH_X;
-    if (Math.abs(dx) > 50) lbNav(dx < 0 ? 1 : -1);
-    LB_TOUCH_X = null;
-  });
+document.getElementById('lightbox')?.addEventListener('touchstart', e => {
+  LB_TOUCH_X = e.touches[0].clientX;
+}, {passive:true});
+document.getElementById('lightbox')?.addEventListener('touchend', e => {
+  if (LB_TOUCH_X === null) return;
+  const dx = e.changedTouches[0].clientX - LB_TOUCH_X;
+  if (Math.abs(dx) > 50) lbNav(dx < 0 ? 1 : -1);
+  LB_TOUCH_X = null;
 });
 
 
@@ -3684,15 +4211,14 @@ function initAutoColorListeners() {
     const isLvField  = lvPatterns.some(p => key.startsWith(p));
     const isRateField = ratePatterns.some(p => key.startsWith(p));
     el.addEventListener('input', () => {
-      if (isLvField)   refreshLvOnly(did);
-      if (isRateField) refreshColors(did);
+      if (isLvField)   refreshLvOnly(did);   // 레벨 편집 → 레벨 색상만
+      if (isRateField) refreshColors(did);   // 달성율 편집 → 달성율 색상만
       syncSumToCard(key, el);
     });
     el.addEventListener('blur', () => {
       if (isLvField)   refreshLvOnly(did);
       if (isRateField) refreshColors(did);
       syncSumToCard(key, el);
-      scheduleGHSave('내용 수정'); // blur 시에만 GitHub 저장
     });
   });
 }
@@ -4091,8 +4617,7 @@ async function saveImages(did) {
       tx.oncomplete = res;
       tx.onerror    = () => rej(tx.error);
     });
-    showSaveBadge(did);
-  scheduleGHSave('이미지 업데이트');
+    showSaveBadge(did);           // 저장 완료 피드백
   } catch(e) {
     console.warn('IndexedDB 저장 실패, localStorage로 대체:', e);
     // fallback: localStorage
@@ -4404,235 +4929,184 @@ function addImageByUrl(did) {
 
 
 
-
-
-
 // ══════════════════════════════════════════════════════════════════════════
-// GitHub 자동 저장 시스템
-// 이미지·텍스트·링크 변경 → GitHub 레포에 index.html 자동 커밋
-// → GitHub Pages 자동 배포 → 모든 방문자 동일 내용 확인
+// 공유 이미지 저장소 — GitHub Gist API
+// GitHub 계정 1개 + 토큰으로 모든 방문자가 동일한 이미지를 볼 수 있음
 // ══════════════════════════════════════════════════════════════════════════
 
-function ghToken()  { return localStorage.getItem('gh-token')  || ''; }
-function ghOwner()  { return localStorage.getItem('gh-owner')  || ''; }
-function ghRepo()   { return localStorage.getItem('gh-repo')   || ''; }
-function ghBranch() { return localStorage.getItem('gh-branch') || 'main'; }
-function ghReady()  { return !!(ghToken() && ghOwner() && ghRepo()); }
+const GH_API = 'https://api.github.com';
 
-/** GitHub 연동 설정 저장 */
-async function connectGitHub() {
-  const token  = document.getElementById('gh-token-inp')?.value.trim();
-  const owner  = document.getElementById('gh-owner-inp')?.value.trim();
-  const repo   = document.getElementById('gh-repo-inp')?.value.trim();
-  const branch = document.getElementById('gh-branch-inp')?.value.trim() || 'main';
-  const status = document.getElementById('gh-setup-status');
+function getGHToken()  { return localStorage.getItem('gh-token')   || ''; }
+function getGHGistId() { return localStorage.getItem('gh-gist-id') || ''; }
 
-  if (!token || !owner || !repo) { alert('토큰, 사용자명, 저장소명을 모두 입력해주세요.'); return; }
-  if (status) status.textContent = '연결 확인 중...';
-
-  // 레포 접근 테스트
+/** Gist에서 이미지 URL 데이터 읽기 (공개 Gist는 토큰 불필요) */
+async function jbRead() {
+  const gistId = getGHGistId();
+  if (!gistId) return null;
   try {
-    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
-      headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github+json' }
-    });
-    if (!res.ok) throw new Error('레포를 찾을 수 없습니다 (' + res.status + ')');
-
-    localStorage.setItem('gh-token',  token);
-    localStorage.setItem('gh-owner',  owner);
-    localStorage.setItem('gh-repo',   repo);
-    localStorage.setItem('gh-branch', branch);
-
-    updateGHStatusBar('idle', '✓ GitHub 연동됨');
-    if (status) status.textContent = `✅ 연동 성공: ${owner}/${repo} (${branch})`;
-
-    // 즉시 저장 실행
-    await saveToGitHub('초기 연동');
-    alert('✅ GitHub 연동 완료!\n이제 이미지·텍스트 변경사항이 자동으로 모든 방문자에게 반영됩니다.');
-  } catch(e) {
-    if (status) status.textContent = '❌ 연동 실패: ' + e.message;
-    alert('연동 실패: ' + e.message);
-  }
+    const headers = { 'Accept': 'application/vnd.github+json' };
+    const token = getGHToken();
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    const res = await fetch(`${GH_API}/gists/${gistId}`, { headers });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const content = json.files?.['portfolio.json']?.content;
+    return content ? JSON.parse(content) : {};
+  } catch(e) { return null; }
 }
 
-function openGHGuide() {
-  alert(
-    '📋 GitHub 연동 설정 방법\n\n' +
-    '① github.com → Settings → Developer settings\n' +
-    '② Personal access tokens → Tokens (classic)\n' +
-    '③ Generate new token → Note: portfolio\n' +
-    '④ Expiration: No expiration\n' +
-    '⑤ Scopes: ☑ repo (전체 체크)\n' +
-    '⑥ Generate token → 복사\n\n' +
-    '저장소명: GitHub Pages를 배포한 저장소 이름\n' +
-    '브랜치: 보통 main 또는 master\n\n' +
-    '연동하면 변경사항이 자동으로 GitHub에 저장되고\n' +
-    '1~2분 후 모든 방문자에게 반영됩니다.'
-  );
-}
-
-/** GitHub 상태바 업데이트 */
-function updateGHStatusBar(state, text, detail) {
-  const bar      = document.getElementById('gh-status-bar');
-  const textEl   = document.getElementById('gh-status-text');
-  const spinner  = document.getElementById('gh-spinner');
-  const lastEl   = document.getElementById('gh-last-saved');
-  if (!bar) return;
-  bar.className = state;   // idle | saving | error
-  if (textEl)  textEl.textContent  = text || '';
-  if (spinner) spinner.style.display = state === 'saving' ? '' : 'none';
-  if (lastEl && detail) lastEl.textContent = ' · ' + detail;
-  if (!ghReady()) bar.className = '';  // 미연동 시 숨김
-}
-
-/** GitHub에 현재 상태를 index.html로 커밋 */
-let _ghSaveTimer = null;
-let _ghSaving   = false;
-function scheduleGHSave(reason) {
-  if (!ghReady() || !isAdmin() || _ghSaving) return;
-  clearTimeout(_ghSaveTimer);
-  _ghSaveTimer = setTimeout(() => saveToGitHub(reason), 4000); // 4초 디바운스
-}
-
-async function saveToGitHub(reason) {
-  if (!ghReady() || !isAdmin() || _ghSaving) return;
-  _ghSaving = true;
-  updateGHStatusBar('saving', '⏳ GitHub에 저장 중...');
-
+/** Gist에 이미지 URL 데이터 저장 (토큰 필요) */
+async function jbWrite(data) {
+  const token  = getGHToken();
+  const gistId = getGHGistId();
+  if (!token || !gistId) return false;
   try {
-    const token  = ghToken();
-    const owner  = ghOwner();
-    const repo   = ghRepo();
-    const branch = ghBranch();
-    const apiBase = `https://api.github.com/repos/${owner}/${repo}/contents/index.html`;
-
-    // 1. 현재 파일 SHA 조회
-    const metaRes = await fetch(apiBase + `?ref=${branch}`, {
-      headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github+json' }
-    });
-    if (!metaRes.ok) throw new Error('파일 조회 실패: ' + metaRes.status);
-    const meta = await metaRes.json();
-    const sha  = meta.sha;
-
-    // 2. 현재 DOM 상태 + 모든 localStorage 수집
-    const lsData = {};
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      lsData[k] = localStorage.getItem(k);
-    }
-
-    // 3. IndexedDB 이미지 수집
-    try {
-      const dids = ['d01','d02','d03','d04','d05','d06','d07',
-                    'd08','d09','d10','d11','d12','d13','d14'];
-      await Promise.all(dids.map(async did => {
-        const state = getState(did);
-        if (state.images.length) {
-          lsData['portfolio_' + did] = JSON.stringify(state.images);
-        }
-      }));
-    } catch(e) {}
-
-    // 4. 버튼 정상 상태로 복원 후 DOM 캡처
-    const saveBtn  = document.getElementById('save-file-btn');
-    const shareSaveBtn = document.getElementById('share-save-btn');
-    const origSaveText  = saveBtn?.innerHTML;
-    const origShareText = shareSaveBtn?.innerHTML;
-    if (saveBtn)      { saveBtn.innerHTML = '📥 파일로 저장'; saveBtn.classList.remove('saving'); }
-    if (shareSaveBtn) { shareSaveBtn.innerHTML = '📤 공유용으로 저장'; shareSaveBtn.style.pointerEvents = ''; }
-
-    const picker = document.getElementById('comp-picker');
-    if (picker) picker.style.display = 'none';
-
-    let doc = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
-
-    if (picker) picker.style.display = '';
-    if (saveBtn && origSaveText)      saveBtn.innerHTML = origSaveText;
-    if (shareSaveBtn && origShareText) shareSaveBtn.innerHTML = origShareText;
-
-    // 5. HTML 정리
-    doc = doc.replace(/<script id="__ls_restore__">[\s\S]*?<\/script>\s*/g, '');
-    doc = doc.replace(/<style id="__share_lock__">[\s\S]*?<\/style>\s*/g, '');
-    doc = doc.replace(/<div id="comp-picker"[\s\S]*?<\/div>\s*/g, '');
-    doc = doc.replace(/class="save-file-btn saving"/g, 'class="save-file-btn"');
-
-    // 6. localStorage 복원 스크립트 삽입
-    const jsonStr = JSON.stringify(lsData)
-      .replace(/<\/script>/gi, '<\\/script>')
-      .replace(/<!--/g, '<\\!--');
-    const restoreScript = [
-      '<script id="__ls_restore__">',
-      '(function(){',
-      '  var D=' + jsonStr + ';',
-      '  try{ for(var k in D) localStorage.setItem(k,D[k]); }catch(e){}',
-      '})();',
-      '<\/script>'
-    ].join('\n');
-    doc = doc.replace('</head>', restoreScript + '\n</head>');
-
-    // 7. base64 인코딩 후 GitHub에 커밋
-    // 한글 포함 HTML을 안전하게 base64 인코딩
-    const enc = new TextEncoder();
-    const bytes = enc.encode(doc);
-    let b64 = '';
-    const chunk = 8192;
-    for (let i = 0; i < bytes.length; i += chunk) {
-      b64 += String.fromCharCode(...bytes.subarray(i, i + chunk));
-    }
-    b64 = btoa(b64);
-    const now  = new Date().toLocaleString('ko-KR');
-
-    const pushRes = await fetch(apiBase, {
-      method:  'PUT',
+    const res = await fetch(`${GH_API}/gists/${gistId}`, {
+      method: 'PATCH',
       headers: {
-        'Authorization': `Bearer ${token}`,
         'Accept':        'application/vnd.github+json',
+        'Authorization': 'Bearer ' + token,
         'Content-Type':  'application/json'
       },
       body: JSON.stringify({
-        message: `포트폴리오 업데이트: ${reason || '변경사항 반영'} (${now})`,
-        content: b64,
-        sha:     sha,
-        branch:  branch
+        files: { 'portfolio.json': { content: JSON.stringify(data) } }
       })
     });
+    return res.ok;
+  } catch(e) { return false; }
+}
 
-    if (!pushRes.ok) {
-      const err = await pushRes.json();
-      throw new Error(err.message || '커밋 실패 (' + pushRes.status + ')');
+/** Gist 새로 생성 */
+async function jbCreate(token) {
+  try {
+    const res = await fetch(`${GH_API}/gists`, {
+      method: 'POST',
+      headers: {
+        'Accept':        'application/vnd.github+json',
+        'Authorization': 'Bearer ' + token,
+        'Content-Type':  'application/json'
+      },
+      body: JSON.stringify({
+        description: 'Eland Portfolio Images',
+        public: true,
+        files: { 'portfolio.json': { content: '{}' } }
+      })
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.id || null;
+  } catch(e) { return null; }
+}
+
+/** 공유 저장소 연동 */
+async function connectJB() {
+  const keyEl = document.getElementById('jb-key-inp');
+  const token = keyEl ? keyEl.value.trim() : '';
+  if (!token) { alert('GitHub Token을 입력해주세요.'); return; }
+
+  const statusEl = document.getElementById('jb-status-text');
+  const dot      = document.getElementById('jb-dot');
+  if (statusEl) statusEl.textContent = '연동 중...';
+  if (dot)      dot.className        = 'ssdot sync';
+
+  // 기존 Gist ID 사용 또는 새로 생성
+  let gistId = getGHGistId();
+  if (!gistId) {
+    gistId = await jbCreate(token);
+    if (!gistId) {
+      if (statusEl) statusEl.textContent = '연동 실패 — 토큰을 확인해주세요.';
+      if (dot)      dot.className        = 'ssdot';
+      alert('연동 실패.\nGitHub Token이 올바른지, gist 권한이 있는지 확인해주세요.');
+      return;
     }
-
-    updateGHStatusBar('idle', '✓ GitHub 저장 완료', now + ' 반영됨');
-    localStorage.setItem('gh-last-saved', now);
-
-  } catch(e) {
-    console.error('GitHub 저장 실패:', e);
-    updateGHStatusBar('error', '❌ 저장 실패: ' + e.message);
-  } finally {
-    _ghSaving = false;
   }
+  localStorage.setItem('gh-token',   token);
+  localStorage.setItem('gh-gist-id', gistId);
+  updateShareStoreUI();
+  alert('✅ 공유 저장소 연동 완료!\n이제 이미지를 업로드하면 모든 방문자에게 자동 표시됩니다.');
+  await migrateLocalToCloud();
 }
 
-/** GitHub 연동 UI 초기화 */
-function initGHSetup() {
-  if (!isAdmin()) return;
-  const tokenInp  = document.getElementById('gh-token-inp');
-  const ownerInp  = document.getElementById('gh-owner-inp');
-  const repoInp   = document.getElementById('gh-repo-inp');
-  const branchInp = document.getElementById('gh-branch-inp');
-  const status    = document.getElementById('gh-setup-status');
-
-  if (tokenInp  && ghToken())  tokenInp.value  = ghToken();
-  if (ownerInp  && ghOwner())  ownerInp.value  = ghOwner();
-  if (repoInp   && ghRepo())   repoInp.value   = ghRepo();
-  if (branchInp && ghBranch()) branchInp.value = ghBranch();
-
-  if (ghReady()) {
-    const last = localStorage.getItem('gh-last-saved') || '';
-    updateGHStatusBar('idle', '✓ GitHub 연동됨', last ? last + ' 마지막 저장' : '');
-    if (status) status.textContent = `연동됨: ${ghOwner()}/${ghRepo()} (${ghBranch()})`;
-    document.getElementById('gh-setup-panel').style.display = 'none'; // 연동됐으면 패널 축소
-  }
+/** 공유 저장소 가이드 */
+function openJBGuide() {
+  alert(
+    '📋 GitHub Token 발급 방법 (3분, 무료)\n\n' +
+    '① github.com 로그인 (없으면 무료 가입)\n' +
+    '② 우측 상단 프로필 → Settings\n' +
+    '③ 좌측 하단 "Developer settings" 클릭\n' +
+    '④ Personal access tokens → Tokens (classic)\n' +
+    '⑤ "Generate new token (classic)" 클릭\n' +
+    '⑥ Note: eland-portfolio\n' +
+    '⑦ Expiration: No expiration\n' +
+    '⑧ Scopes: ☑ gist 체크\n' +
+    '⑨ "Generate token" → 토큰 복사\n\n' +
+    '복사한 토큰을 입력창에 붙여넣고 연동 버튼을 누르세요.'
+  );
 }
+
+/** 로컬 이미지 → 공유 저장소 마이그레이션 */
+async function migrateLocalToCloud() {
+  const dids = ['d01','d02','d03','d04','d05','d06','d07',
+                'd08','d09','d10','d11','d12','d13','d14'];
+  const cloudData = (await jbRead()) || {};
+  let changed = false;
+  for (const did of dids) {
+    const local = getState(did).images;
+    if (local.length) { cloudData[did] = local; changed = true; }
+  }
+  if (changed) await jbWrite(cloudData);
+}
+
+/** 공유 저장소에서 전체 이미지 로드 */
+async function loadSharedImages() {
+  const data = await jbRead();
+  if (!data) return false;
+  let loaded = false;
+  for (const did of Object.keys(data)) {
+    const imgs = data[did];
+    if (Array.isArray(imgs) && imgs.length) {
+      getState(did).images = imgs;
+      getState(did).cur    = 0;
+      renderSlideshow(did);
+      loaded = true;
+    }
+  }
+  return loaded;
+}
+
+/** 공유 저장소 UI 갱신 */
+function updateShareStoreUI() {
+  const token  = getGHToken();
+  const gistId = getGHGistId();
+  const ok     = !!(token && gistId);
+  const dot    = document.getElementById('jb-dot');
+  const label  = document.getElementById('jb-status-text');
+  const keyEl  = document.getElementById('jb-key-inp');
+  if (dot)   dot.className    = 'ssdot ' + (ok ? 'on' : '');
+  if (label) {
+    label.textContent = ok
+      ? '🌐 GitHub Gist 연동됨 — 모든 방문자에게 이미지 공유 중'
+      : '공유 저장소 미연동 — 이 기기에서만 이미지 보임';
+    label.style.color = ok ? '#059669' : '#92400E';
+  }
+  if (keyEl && !keyEl.value && token) keyEl.value = token;
+}
+
+// ── saveImages 오버라이드: IndexedDB + Gist 동시 저장 ──────────────────
+const _origSaveImages = saveImages;
+saveImages = async function(did) {
+  await _origSaveImages(did);
+  if (getGHToken() && getGHGistId()) {
+    try {
+      const dot = document.getElementById('jb-dot');
+      if (dot) dot.className = 'ssdot sync';
+      const data = (await jbRead()) || {};
+      data[did]  = getState(did).images;
+      const ok   = await jbWrite(data);
+      if (dot) dot.className = ok ? 'ssdot on' : 'ssdot';
+    } catch(e) { console.warn('공유 저장소 저장 실패:', e); }
+  }
+};
 
 </script>
 
