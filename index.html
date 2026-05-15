@@ -2957,7 +2957,17 @@ window.addEventListener('DOMContentLoaded', () => {
   requestAnimationFrame(() => restoreAllColors());
   // API Key 자동 세팅
   if (!localStorage.getItem('imgbb-api-key')) localStorage.setItem('imgbb-api-key', '651d655972b22a46089b521b347dff8b');
-  updateCloudUI(); // 클라우드 상태 UI 갱신 // 재계산 후 확정
+  // 공유 이미지 저장소 — Gist ID 자동 세팅 (공개 Gist: 토큰 없이 읽기 가능)
+  if (!localStorage.getItem('gh-gist-id')) localStorage.setItem('gh-gist-id', '58e5675617a7993b4c6debdfef35d18c');
+  updateCloudUI(); // 클라우드 상태 UI 갱신
+  updateShareStoreUI();
+  // 페이지 로드 시 공유 Gist에서 이미지 불러오기 (방문자에게 이미지 표시)
+  setTimeout(async () => {
+    try {
+      const loaded = await loadSharedImages();
+      if (!loaded) await loadImages();
+    } catch(e) { try { await loadImages(); } catch(_) {} }
+  }, 0);
 });
 
 // ── 링크 관리 시스템 ────────────────────────────────────────────────────────
@@ -4333,17 +4343,25 @@ const GH_API = 'https://api.github.com';
 function getGHToken()  { return localStorage.getItem('gh-token')   || ''; }
 function getGHGistId() { return localStorage.getItem('gh-gist-id') || ''; }
 
-/** Gist에서 이미지 URL 데이터 읽기 (공개 Gist는 토큰 불필요) */
+/** Gist에서 이미지 URL 데이터 읽기 (공개 Gist raw URL: 토큰 불필요, 캐시 우회) */
 async function jbRead() {
   const gistId = getGHGistId();
   if (!gistId) return null;
   try {
+    // 공개 Gist는 raw URL로 토큰 없이 읽기 가능 (캐시 방지용 timestamp)
+    const rawUrl = `https://gist.githubusercontent.com/park052792-lang/${gistId}/raw/portfolio.json?t=${Date.now()}`;
+    const res = await fetch(rawUrl);
+    if (res.ok) {
+      const text = await res.text();
+      return text ? JSON.parse(text) : {};
+    }
+    // 폴백: GitHub API 사용
     const headers = { 'Accept': 'application/vnd.github+json' };
     const token = getGHToken();
     if (token) headers['Authorization'] = 'Bearer ' + token;
-    const res = await fetch(`${GH_API}/gists/${gistId}`, { headers });
-    if (!res.ok) return null;
-    const json = await res.json();
+    const res2 = await fetch(`${GH_API}/gists/${gistId}`, { headers });
+    if (!res2.ok) return null;
+    const json = await res2.json();
     const content = json.files?.['portfolio.json']?.content;
     return content ? JSON.parse(content) : {};
   } catch(e) { return null; }
@@ -4451,18 +4469,24 @@ async function migrateLocalToCloud() {
   if (changed) await jbWrite(cloudData);
 }
 
-/** 공유 저장소에서 전체 이미지 로드 */
+/** 공유 저장소에서 전체 이미지 로드 (Gist 우선, 없으면 IndexedDB 폴백) */
 async function loadSharedImages() {
   const data = await jbRead();
-  if (!data) return false;
+  const dids = ['d01','d02','d03','d04','d05','d06','d07',
+                'd08','d09','d10','d11','d12','d13','d14'];
   let loaded = false;
-  for (const did of Object.keys(data)) {
-    const imgs = data[did];
-    if (Array.isArray(imgs) && imgs.length) {
-      getState(did).images = imgs;
-      getState(did).cur    = 0;
-      renderSlideshow(did);
-      loaded = true;
+  if (data) {
+    for (const did of dids) {
+      const imgs = data[did];
+      if (Array.isArray(imgs) && imgs.length) {
+        getState(did).images = imgs;
+        getState(did).cur    = 0;
+        renderSlideshow(did);
+        loaded = true;
+      } else {
+        // Gist에 없는 디자이너는 IndexedDB 폴백
+        await loadImagesForDid(did);
+      }
     }
   }
   return loaded;
