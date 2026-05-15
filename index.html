@@ -2958,6 +2958,7 @@ window.addEventListener('DOMContentLoaded', () => {
   // API Key 자동 세팅
   if (!localStorage.getItem('imgbb-api-key')) localStorage.setItem('imgbb-api-key', '651d655972b22a46089b521b347dff8b');
   updateCloudUI(); // 클라우드 상태 UI 갱신 // 재계산 후 확정
+  loadImages(); // 새로고침 후 포트폴리오 이미지 복원
 });
 
 // ── 링크 관리 시스템 ────────────────────────────────────────────────────────
