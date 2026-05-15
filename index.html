@@ -2947,6 +2947,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
   initAutoColorListeners();
   initAutoCalcListeners();
+  initSumSyncListeners();
   initCardKpiListeners();
   lpInitAll();
   loadEditableContent();
@@ -3887,9 +3888,22 @@ function initAutoCalcListeners() {
     const did = key.split('-').slice(-1)[0];
     if (!did.match(/^d\d{2}$/)) return;
 
-    // 입력 끝낼 때 자동계산 실행
-    el.addEventListener('blur',  () => autoCalcRate(did));
+    // 입력 끝낼 때 자동계산 + 카드 동기화 실행
+    el.addEventListener('blur',  () => { autoCalcRate(did); syncSumToCard(key, el); });
     el.addEventListener('keydown', e => { if(e.key==='Enter'){ e.preventDefault(); el.blur(); }});
+  });
+}
+
+/** 별첨 → 카드: SYNC_MAP의 모든 sum-* 필드에 동기화 리스너 등록 */
+function initSumSyncListeners() {
+  const prefixes = Object.keys(SYNC_MAP); // 'sum-rate', 'sum-target', ...
+  document.querySelectorAll('[data-key]').forEach(el => {
+    const key = el.dataset.key || '';
+    if (!prefixes.some(p => key.startsWith(p + '-'))) return;
+    const did = key.split('-').slice(-1)[0];
+    if (!did.match(/^d\d{2}$/)) return;
+    el.addEventListener('input', () => syncSumToCard(key, el));
+    el.addEventListener('blur',  () => syncSumToCard(key, el));
   });
 }
 // ══════════════════════════════════════════════════════════════════════════
