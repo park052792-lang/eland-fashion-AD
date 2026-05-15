@@ -426,7 +426,7 @@ body.non-admin .cloud-setup-wrap{display:none}
   </div>
   <div class="share-store-row">
     <input type="text" class="share-store-inp" id="jb-key-inp"
-      placeholder="JSONBin.io Master Key 입력 → 연동하면 모든 방문자에게 이미지 공유">
+      placeholder="GitHub Personal Access Token 입력 (gist 권한 필요)">
     <button class="share-store-btn" onclick="connectJB()">🔗 연동</button>
     <button class="share-store-btn" style="background:#6B7280" onclick="openJBGuide()">?</button>
   </div>
@@ -4320,109 +4320,121 @@ function addImageByUrl(did) {
 }
 
 
+
+
+
 // ══════════════════════════════════════════════════════════════════════════
-// 공유 이미지 저장소 (JSONBin.io)
-// ─ 이미지 URL 목록을 클라우드에 공유 → 모든 방문자가 동일한 이미지 확인
+// 공유 이미지 저장소 — GitHub Gist API
+// GitHub 계정 1개 + 토큰으로 모든 방문자가 동일한 이미지를 볼 수 있음
 // ══════════════════════════════════════════════════════════════════════════
 
-const JSONBIN_BASE = 'https://api.jsonbin.io/v3/b';
+const GH_API = 'https://api.github.com';
 
-function getJBKey()   { return localStorage.getItem('jb-master-key') || ''; }
-function getJBBin()   { return localStorage.getItem('jb-bin-id')     || ''; }
+function getGHToken()  { return localStorage.getItem('gh-token')   || ''; }
+function getGHGistId() { return localStorage.getItem('gh-gist-id') || ''; }
 
-/** 공유 저장소에서 전체 이미지 데이터 읽기 (인증 불필요 - 공개 bin) */
+/** Gist에서 이미지 URL 데이터 읽기 (공개 Gist는 토큰 불필요) */
 async function jbRead() {
-  const binId = getJBBin();
-  if (!binId) return null;
+  const gistId = getGHGistId();
+  if (!gistId) return null;
   try {
-    const res = await fetch(`${JSONBIN_BASE}/${binId}/latest`, {
-      headers: { 'X-JSON-Privacy': 'false' }
-    });
+    const headers = { 'Accept': 'application/vnd.github+json' };
+    const token = getGHToken();
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    const res = await fetch(`${GH_API}/gists/${gistId}`, { headers });
     if (!res.ok) return null;
     const json = await res.json();
-    return json.record || {};
+    const content = json.files?.['portfolio.json']?.content;
+    return content ? JSON.parse(content) : {};
   } catch(e) { return null; }
 }
 
-/** 공유 저장소에 이미지 데이터 저장 (관리자 키 필요) */
+/** Gist에 이미지 URL 데이터 저장 (토큰 필요) */
 async function jbWrite(data) {
-  const key   = getJBKey();
-  const binId = getJBBin();
-  if (!key || !binId) return false;
+  const token  = getGHToken();
+  const gistId = getGHGistId();
+  if (!token || !gistId) return false;
   try {
-    const res = await fetch(`${JSONBIN_BASE}/${binId}`, {
-      method:  'PUT',
+    const res = await fetch(`${GH_API}/gists/${gistId}`, {
+      method: 'PATCH',
       headers: {
-        'Content-Type': 'application/json',
-        'X-Master-Key': key,
-        'X-Bin-Versioning': 'false'
+        'Accept':        'application/vnd.github+json',
+        'Authorization': 'Bearer ' + token,
+        'Content-Type':  'application/json'
       },
-      body: JSON.stringify(data)
+      body: JSON.stringify({
+        files: { 'portfolio.json': { content: JSON.stringify(data) } }
+      })
     });
     return res.ok;
   } catch(e) { return false; }
 }
 
-/** 공유 저장소 초기 생성 */
-async function jbCreate(key) {
+/** Gist 새로 생성 */
+async function jbCreate(token) {
   try {
-    const res = await fetch(JSONBIN_BASE, {
-      method:  'POST',
+    const res = await fetch(`${GH_API}/gists`, {
+      method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'X-Master-Key':   key,
-        'X-Bin-Name':     'eland-portfolio-images',
-        'X-Bin-Private':  'false'   // 공개 읽기 허용
+        'Accept':        'application/vnd.github+json',
+        'Authorization': 'Bearer ' + token,
+        'Content-Type':  'application/json'
       },
-      body: JSON.stringify({})
+      body: JSON.stringify({
+        description: 'Eland Portfolio Images',
+        public: true,
+        files: { 'portfolio.json': { content: '{}' } }
+      })
     });
     if (!res.ok) return null;
     const json = await res.json();
-    return json.metadata?.id || null;
+    return json.id || null;
   } catch(e) { return null; }
 }
 
-/** 공유 저장소 설정 저장 */
-async function saveJBSettings(key, binId) {
-  localStorage.setItem('jb-master-key', key);
-  localStorage.setItem('jb-bin-id',     binId);
-  updateShareStoreUI();
-}
-
-/** 공유 저장소 연동 버튼 */
+/** 공유 저장소 연동 */
 async function connectJB() {
   const keyEl = document.getElementById('jb-key-inp');
-  const key   = keyEl ? keyEl.value.trim() : '';
-  if (!key) { alert('Master Key를 입력해주세요.'); return; }
+  const token = keyEl ? keyEl.value.trim() : '';
+  if (!token) { alert('GitHub Token을 입력해주세요.'); return; }
 
   const statusEl = document.getElementById('jb-status-text');
+  const dot      = document.getElementById('jb-dot');
   if (statusEl) statusEl.textContent = '연동 중...';
+  if (dot)      dot.className        = 'ssdot sync';
 
-  // 기존 bin ID 확인
-  let binId = getJBBin();
-  if (!binId) {
-    // 새 bin 생성
-    binId = await jbCreate(key);
-    if (!binId) { alert('연동 실패: Master Key를 확인해주세요.'); return; }
+  // 기존 Gist ID 사용 또는 새로 생성
+  let gistId = getGHGistId();
+  if (!gistId) {
+    gistId = await jbCreate(token);
+    if (!gistId) {
+      if (statusEl) statusEl.textContent = '연동 실패 — 토큰을 확인해주세요.';
+      if (dot)      dot.className        = 'ssdot';
+      alert('연동 실패.\nGitHub Token이 올바른지, gist 권한이 있는지 확인해주세요.');
+      return;
+    }
   }
-
-  await saveJBSettings(key, binId);
-  alert('✅ 공유 저장소 연동 완료!\n이제 이미지를 업로드하면 모든 방문자에게 표시됩니다.');
-
-  // 기존 로컬 이미지를 공유 저장소로 마이그레이션
+  localStorage.setItem('gh-token',   token);
+  localStorage.setItem('gh-gist-id', gistId);
+  updateShareStoreUI();
+  alert('✅ 공유 저장소 연동 완료!\n이제 이미지를 업로드하면 모든 방문자에게 자동 표시됩니다.');
   await migrateLocalToCloud();
 }
 
 /** 공유 저장소 가이드 */
 function openJBGuide() {
   alert(
-    '📋 공유 저장소 설정 방법 (JSONBin.io)\n\n' +
-    '① jsonbin.io 접속 → 무료 회원가입 (구글 로그인 가능)\n' +
-    '② 우측 상단 → "API Keys" 클릭\n' +
-    '③ "Master Key" 복사\n' +
-    '④ 아래 입력란에 붙여넣기 → "연동" 클릭\n\n' +
-    '연동하면 이미지가 클라우드에 저장되어\n' +
-    '모든 방문자가 새로고침 후 동일한 이미지를 볼 수 있습니다.'
+    '📋 GitHub Token 발급 방법 (3분, 무료)\n\n' +
+    '① github.com 로그인 (없으면 무료 가입)\n' +
+    '② 우측 상단 프로필 → Settings\n' +
+    '③ 좌측 하단 "Developer settings" 클릭\n' +
+    '④ Personal access tokens → Tokens (classic)\n' +
+    '⑤ "Generate new token (classic)" 클릭\n' +
+    '⑥ Note: eland-portfolio\n' +
+    '⑦ Expiration: No expiration\n' +
+    '⑧ Scopes: ☑ gist 체크\n' +
+    '⑨ "Generate token" → 토큰 복사\n\n' +
+    '복사한 토큰을 입력창에 붙여넣고 연동 버튼을 누르세요.'
   );
 }
 
@@ -4434,21 +4446,17 @@ async function migrateLocalToCloud() {
   let changed = false;
   for (const did of dids) {
     const local = getState(did).images;
-    if (local.length) {
-      cloudData[did] = local;
-      changed = true;
-    }
+    if (local.length) { cloudData[did] = local; changed = true; }
   }
   if (changed) await jbWrite(cloudData);
 }
 
-/** 공유 저장소에서 모든 이미지 로드 */
+/** 공유 저장소에서 전체 이미지 로드 */
 async function loadSharedImages() {
   const data = await jbRead();
   if (!data) return false;
-  const dids = Object.keys(data);
   let loaded = false;
-  for (const did of dids) {
+  for (const did of Object.keys(data)) {
     const imgs = data[did];
     if (Array.isArray(imgs) && imgs.length) {
       getState(did).images = imgs;
@@ -4460,37 +4468,36 @@ async function loadSharedImages() {
   return loaded;
 }
 
-/** 공유 저장소 UI 상태 갱신 */
+/** 공유 저장소 UI 갱신 */
 function updateShareStoreUI() {
-  const key   = getJBKey();
-  const binId = getJBBin();
-  const ok    = !!(key && binId);
-  const dot   = document.getElementById('jb-dot');
-  const label = document.getElementById('jb-status-text');
-  const keyEl = document.getElementById('jb-key-inp');
-  if (dot)   dot.className   = 'ssdot ' + (ok ? 'on' : '');
+  const token  = getGHToken();
+  const gistId = getGHGistId();
+  const ok     = !!(token && gistId);
+  const dot    = document.getElementById('jb-dot');
+  const label  = document.getElementById('jb-status-text');
+  const keyEl  = document.getElementById('jb-key-inp');
+  if (dot)   dot.className    = 'ssdot ' + (ok ? 'on' : '');
   if (label) {
     label.textContent = ok
-      ? '🌐 공유 저장소 연동됨 — 모든 방문자에게 이미지 표시'
+      ? '🌐 GitHub Gist 연동됨 — 모든 방문자에게 이미지 공유 중'
       : '공유 저장소 미연동 — 이 기기에서만 이미지 보임';
     label.style.color = ok ? '#059669' : '#92400E';
   }
-  if (keyEl && !keyEl.value) keyEl.value = key;
+  if (keyEl && !keyEl.value && token) keyEl.value = token;
 }
 
-// ── saveImages 오버라이드: IndexedDB + 공유 저장소 동시 저장 ──────────
+// ── saveImages 오버라이드: IndexedDB + Gist 동시 저장 ──────────────────
 const _origSaveImages = saveImages;
 saveImages = async function(did) {
-  await _origSaveImages(did);   // IndexedDB 저장
-  // 공유 저장소가 연동되어 있으면 함께 저장
-  if (getJBKey() && getJBBin()) {
+  await _origSaveImages(did);
+  if (getGHToken() && getGHGistId()) {
     try {
       const dot = document.getElementById('jb-dot');
-      if (dot) { dot.className = 'ssdot sync'; }
+      if (dot) dot.className = 'ssdot sync';
       const data = (await jbRead()) || {};
-      data[did] = getState(did).images;
-      await jbWrite(data);
-      if (dot) { dot.className = 'ssdot on'; }
+      data[did]  = getState(did).images;
+      const ok   = await jbWrite(data);
+      if (dot) dot.className = ok ? 'ssdot on' : 'ssdot';
     } catch(e) { console.warn('공유 저장소 저장 실패:', e); }
   }
 };
