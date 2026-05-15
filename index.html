@@ -2558,20 +2558,7 @@ function loadLinks() {
 const SW = {};
 function getState(did) { if (!SW[did]) SW[did] = {images:[], cur:0}; return SW[did]; }
 
-function addImages(did, input) {
-  const files = Array.from(input.files);
-  if (!files.length) return;
-  let loaded = 0;
-  files.forEach(file => {
-    const reader = new FileReader();
-    reader.onload = e => {
-      getState(did).images.push({src: e.target.result, name: file.name});
-      if (++loaded === files.length) { saveImages(did); renderSlideshow(did); }
-    };
-    reader.readAsDataURL(file);
-  });
-  input.value = '';
-}
+
 
 function clearImages(did) {
   if (!confirm('포트폴리오 이미지를 모두 삭제할까요?')) return;
@@ -2642,19 +2629,9 @@ function renderSlideshow(did) {
   thumbs.parentNode.querySelectorAll('.sw-reorder-tip').forEach((el,idx) => { if(idx > 0) el.remove(); });
 }
 
-function saveImages(did) {
-  try { localStorage.setItem('portfolio_' + did, JSON.stringify(getState(did).images)); } catch(e) { console.warn('이미지 저장 실패 (용량 초과):', e); }
-}
 
-function loadImages() {
-  Object.keys(localStorage).filter(k => k.startsWith('portfolio_')).forEach(k => {
-    const did = k.replace('portfolio_', '');
-    try {
-      const imgs = JSON.parse(localStorage.getItem(k));
-      if (Array.isArray(imgs) && imgs.length) { getState(did).images = imgs; getState(did).cur = 0; renderSlideshow(did); }
-    } catch(e) {}
-  });
-}
+
+
 
 // ── KEYBOARD ──────────────────────────────────────────────────────────────
 document.addEventListener('keydown', e => {
@@ -3716,6 +3693,204 @@ function restoreColorStyles() {
     // lv-badge 복원
     refreshLvOnly(did);
   });
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// 이미지 저장 시스템: IndexedDB 기반 (localStorage 5MB 한계 극복)
+// 새로고침·링크 재접속 시에도 이미지 완전 유지
+// ══════════════════════════════════════════════════════════════════════════
+
+const IDB_NAME    = 'eland-portfolio';
+const IDB_VERSION = 1;
+const IDB_STORE   = 'images';
+let   _idb        = null;
+
+/** IndexedDB 초기화 */
+function idbOpen() {
+  return new Promise((resolve, reject) => {
+    if (_idb) return resolve(_idb);
+    const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(IDB_STORE))
+        db.createObjectStore(IDB_STORE, { keyPath: 'did' });
+    };
+    req.onsuccess = e => { _idb = e.target.result; resolve(_idb); };
+    req.onerror   = () => reject(req.error);
+  });
+}
+
+/** IndexedDB에 이미지 배열 저장 */
+async function saveImages(did) {
+  const images = getState(did).images;
+  try {
+    const db = await idbOpen();
+    await new Promise((res, rej) => {
+      const tx  = db.transaction(IDB_STORE, 'readwrite');
+      const req = tx.objectStore(IDB_STORE).put({ did, images });
+      tx.oncomplete = res;
+      tx.onerror    = () => rej(tx.error);
+    });
+    showSaveBadge(did);           // 저장 완료 피드백
+  } catch(e) {
+    console.warn('IndexedDB 저장 실패, localStorage로 대체:', e);
+    // fallback: localStorage
+    try { localStorage.setItem('portfolio_' + did, JSON.stringify(images)); } catch(_) {}
+  }
+}
+
+/** IndexedDB에서 이미지 배열 로드 */
+async function loadImagesForDid(did) {
+  try {
+    const db = await idbOpen();
+    const data = await new Promise((res, rej) => {
+      const tx  = db.transaction(IDB_STORE, 'readonly');
+      const req = tx.objectStore(IDB_STORE).get(did);
+      req.onsuccess = () => res(req.result);
+      req.onerror   = () => rej(req.error);
+    });
+    if (data?.images?.length) {
+      getState(did).images = data.images;
+      getState(did).cur    = 0;
+      renderSlideshow(did);
+    } else {
+      // IndexedDB에 없으면 localStorage 마이그레이션 시도
+      const ls = localStorage.getItem('portfolio_' + did);
+      if (ls) {
+        const imgs = JSON.parse(ls);
+        if (imgs?.length) {
+          getState(did).images = imgs;
+          getState(did).cur    = 0;
+          renderSlideshow(did);
+          saveImages(did);   // IndexedDB로 마이그레이션
+          localStorage.removeItem('portfolio_' + did);
+        }
+      }
+    }
+  } catch(e) {
+    // fallback: localStorage
+    try {
+      const ls = localStorage.getItem('portfolio_' + did);
+      if (ls) {
+        const imgs = JSON.parse(ls);
+        if (imgs?.length) { getState(did).images = imgs; getState(did).cur = 0; renderSlideshow(did); }
+      }
+    } catch(_) {}
+  }
+}
+
+/** 전체 디자이너 이미지 로드 */
+async function loadImages() {
+  const dids = ['d01','d02','d03','d04','d05','d06','d07',
+                'd08','d09','d10','d11','d12','d13','d14'];
+  await Promise.all(dids.map(did => loadImagesForDid(did)));
+}
+
+/** 이미지 파일 추가 (자동 압축 포함) */
+function addImages(did, input) {
+  const files = Array.from(input.files);
+  if (!files.length) return;
+  let loaded = 0;
+  files.forEach(file => {
+    compressImage(file, (compressed) => {
+      getState(did).images.push({ src: compressed.src, name: compressed.name });
+      if (++loaded === files.length) {
+        saveImages(did);
+        renderSlideshow(did);
+      }
+    });
+  });
+  input.value = '';
+}
+
+/**
+ * 이미지 자동 압축 (최대 900px, JPEG 72%)
+ * 원본 대비 80~90% 용량 절감
+ */
+function compressImage(file, callback) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 900;
+      let w = img.width, h = img.height;
+      if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
+      else if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      const isGif = file.type === 'image/gif';
+      const src   = isGif
+        ? e.target.result                                        // GIF: 압축 없이 원본
+        : canvas.toDataURL('image/jpeg', 0.72);
+      callback({ src, name: file.name });
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+/** 저장 완료 피드백 배지 */
+function showSaveBadge(did) {
+  const el = document.getElementById('thumbs-' + did);
+  if (!el) return;
+  let badge = document.getElementById('save-badge-' + did);
+  if (!badge) {
+    badge = document.createElement('span');
+    badge.id = 'save-badge-' + did;
+    badge.style.cssText = 'font-size:10px;color:#059669;font-weight:700;margin-left:8px;opacity:1;transition:opacity 1.5s';
+    el.parentNode.insertBefore(badge, el.nextSibling);
+  }
+  badge.textContent = '✓ 저장됨';
+  badge.style.opacity = '1';
+  setTimeout(() => { badge.style.opacity = '0'; }, 2000);
+}
+
+
+/** [신규] IndexedDB 이미지를 포함해 파일 저장 */
+async function _execSaveWithImages(isShare) {
+  const btn = isShare
+    ? document.getElementById('share-save-btn')
+    : document.getElementById('save-file-btn');
+  if (btn) {
+    btn.textContent      = '⏳ 저장 중...';
+    btn.style.background = '#6B7280';
+    btn.style.pointerEvents = 'none';
+  }
+  try {
+    // IndexedDB의 이미지를 SW state에 미리 로드
+    const dids = ['d01','d02','d03','d04','d05','d06','d07',
+                  'd08','d09','d10','d11','d12','d13','d14'];
+    await Promise.all(dids.map(async did => {
+      try {
+        const db   = await idbOpen();
+        const data = await new Promise((res,rej) => {
+          const tx  = db.transaction(IDB_STORE,'readonly');
+          const req = tx.objectStore(IDB_STORE).get(did);
+          req.onsuccess = () => res(req.result);
+          req.onerror   = () => rej(req.error);
+        });
+        if (data?.images?.length) {
+          getState(did).images = data.images;
+          // localStorage에도 임시 기록 (outerHTML 캡처 시 복원 스크립트용)
+          localStorage.setItem('portfolio_' + did, JSON.stringify(data.images));
+        }
+      } catch(e) {}
+    }));
+
+    // 실제 저장 실행
+    _execSave(isShare);
+
+  } catch(err) {
+    alert('저장 오류: ' + err.message);
+  } finally {
+    if (btn) {
+      btn.textContent      = isShare ? '📤 공유용으로 저장' : '📥 파일로 저장';
+      btn.style.background = '';
+      btn.style.pointerEvents = '';
+    }
+  }
 }
 
 </script>
