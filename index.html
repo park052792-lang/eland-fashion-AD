@@ -269,6 +269,67 @@ b[data-key^="sum-c"]:hover{opacity:.75}
 .comp-opt-label{font-size:9px;color:#6B7280;font-weight:600}
 /* ─ [수정] 역량기호 cursor 변경 ─ */
 b[data-key^="sum-c"]{cursor:pointer!important}
+
+/* ─ 관리자 모달 ─ */
+#admin-modal{
+  display:none;position:fixed;inset:0;z-index:99999;
+  background:rgba(0,0,0,.65);align-items:center;justify-content:center
+}
+#admin-modal.open{display:flex}
+.admin-box{
+  background:#fff;border-radius:16px;padding:32px 28px;width:100%;max-width:380px;
+  box-shadow:0 20px 60px rgba(0,0,0,.25);animation:admin-in .18s ease
+}
+@keyframes admin-in{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:scale(1)}}
+.admin-box h2{font-size:18px;font-weight:800;margin-bottom:4px}
+.admin-box p{font-size:13px;color:#6B7280;margin-bottom:20px}
+.admin-input{
+  width:100%;border:1.5px solid #E2E8F0;border-radius:8px;
+  padding:10px 14px;font-size:14px;font-family:inherit;
+  outline:none;margin-bottom:10px;transition:border .15s
+}
+.admin-input:focus{border-color:#2563EB}
+.admin-input.error{border-color:#DC2626;animation:shake .3s ease}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.admin-btn-row{display:flex;gap:8px;margin-top:4px}
+.admin-btn{flex:1;padding:10px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s}
+.admin-btn-primary{background:#111;color:#fff}.admin-btn-primary:hover{background:#333}
+.admin-btn-cancel{background:#F1F5F9;color:#374151}.admin-btn-cancel:hover{background:#E2E8F0}
+.admin-err{color:#DC2626;font-size:12px;margin-top:4px;display:none}
+.admin-lock-icon{font-size:32px;margin-bottom:12px}
+/* ─ 편집 모드 토글 ─ */
+.edit-toggle-btn{
+  border:1.5px solid #E2E8F0;border-radius:20px;padding:5px 12px;
+  font-size:12px;font-weight:700;cursor:pointer;transition:all .15s;
+  display:flex;align-items:center;gap:5px;background:#fff;white-space:nowrap
+}
+.edit-toggle-btn.on{background:#111;color:#fff;border-color:#111}
+.edit-toggle-btn.off{background:#F1F5F9;color:#6B7280}
+/* 편집 비활성화 시 contenteditable 커서 숨김 */
+body.edit-off [contenteditable]{
+  pointer-events:none!important;cursor:default!important;
+  outline:none!important;user-select:text
+}
+body.edit-off [contenteditable]:hover{outline:none!important}
+/* ─ 관리자 메뉴 ─ */
+.admin-menu-btn{
+  background:none;border:1.5px solid #E2E8F0;border-radius:20px;
+  padding:5px 10px;font-size:11px;color:#9CA3AF;cursor:pointer;
+  transition:all .15s;white-space:nowrap
+}
+.admin-menu-btn:hover{background:#F1F5F9;color:#374151}
+.admin-indicator{
+  display:inline-flex;align-items:center;gap:4px;
+  font-size:11px;color:#059669;font-weight:600
+}
+.admin-indicator .dot{
+  width:7px;height:7px;border-radius:50%;background:#059669;
+  box-shadow:0 0 0 2px rgba(5,150,105,.25)
+}
+/* 비관리자: 보고용 버튼 숨김 */
+body.non-admin #btn-report{display:none}
+body.non-admin .edit-toggle-btn{display:none}
+body.non-admin #save-file-btn{display:none}
 </style>
 </head>
 <body>
@@ -307,14 +368,23 @@ b[data-key^="sum-c"]{cursor:pointer!important}
 
 <div class="mode-bar" id="mode-bar">
   <span style="font-size:12px;font-weight:700;color:#374151">📋 보기 모드</span>
-  <button class="mode-btn active report" id="btn-report" onclick="setViewMode('report')">📊 보고용</button>
+  <button class="mode-btn active report" id="btn-report" onclick="reqReportMode()">📊 보고용</button>
   <button class="mode-btn share" id="btn-share" onclick="setViewMode('share')">🎨 디자이너 공유용</button>
   <span class="mode-desc" id="mode-desc">레벨평가 · 역량평가 · KPI 전체 지표 포함</span>
   <span class="share-badge">레벨 · 역량 제외</span>
-  <button onclick="printPage()" style="margin-left:auto;background:#F8FAFC;color:#374151;border:1px solid #E2E8F0;border-radius:20px;padding:5px 12px;font-size:11px;cursor:pointer">🖨️ 인쇄/PDF</button>
-  <button id="share-save-btn" onclick="saveToFileShare()">📤 공유용으로 저장</button>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+    <span class="admin-indicator" id="admin-indicator" style="display:none">
+      <span class="dot"></span>관리자
+    </span>
+    <button class="edit-toggle-btn off" id="edit-toggle-btn" onclick="toggleEditMode()" title="편집 모드 켜기/끄기">✏️ 편집 OFF</button>
+    <button onclick="printPage()" style="background:#F8FAFC;color:#374151;border:1px solid #E2E8F0;border-radius:20px;padding:5px 12px;font-size:11px;cursor:pointer">🖨️ 인쇄/PDF</button>
+    <button id="share-save-btn" onclick="saveToFileShare()">📤 공유용으로 저장</button>
+    <button class="admin-menu-btn" id="admin-logout-btn" style="display:none" onclick="adminLogout()">🔓 로그아웃</button>
+    <button class="admin-menu-btn" id="admin-pw-btn" style="display:none" onclick="openPwChange()">🔑 비밀번호 변경</button>
+    <button class="admin-menu-btn" id="admin-login-btn" onclick="openAdminModal('report')">🔐 관리자 로그인</button>
+  </div>
 </div>
-<div class="edit-mode-bar">
+<div class="edit-mode-bar" style="display:none" id="edit-mode-bar-legacy">
   ✏️ <strong>편집 모드 활성화</strong> — 텍스트 클릭 시 바로 수정 가능. <b>📥 파일로 저장</b>을 눌러야 다음에 열어도 유지됩니다. &nbsp;
   <span style="margin-left:auto;display:flex;gap:6px">
     <button onclick="saveAll()" style="background:#374151;color:#fff;border:none;border-radius:6px;padding:4px 12px;font-size:12px;cursor:pointer;font-weight:700">💾 임시저장</button>
@@ -1022,11 +1092,31 @@ b[data-key^="sum-c"]{cursor:pointer!important}
     </table>
     </div>
     <div style="margin-top:14px;padding:10px 14px;background:#F8FAFC;border-radius:8px;border:1px solid #E2E8F0;font-size:12px;color:#555" contenteditable="true">
-      <strong>📌 광고 과업 레벨 기준</strong> &nbsp;
-      <b>A형</b> 온/오프 전마 촬영+대형팝업(연출물 10개↑) &nbsp;·&nbsp;
-      <b>B형</b> 온라인기획전+중형팝업+매장전마(연출물 10개↓) &nbsp;·&nbsp;
-      <b>C형</b> 데일리/모듈화된 매장연출물
+      <strong>📌 광고 과업 레벨 기준</strong>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px">
+        <span><b>A형</b> 온/오프 전마 촬영 + 대형팝업 (연출물 10개↑)</span>
+        <span style="color:#D1D5DB">·</span>
+        <span><b>B형</b> 온라인기획전 + 중형팝업 + 매장전마 (연출물 10개↓)</span>
+        <span style="color:#D1D5DB">·</span>
+        <span><b>C형</b> 데일리 / 모듈화된 매장연출물</span>
+      </div>
     </div>
+    <div style="margin-top:8px;padding:10px 14px;background:#F8FAFC;border-radius:8px;border:1px solid #E2E8F0;font-size:12px;color:#555" contenteditable="true">
+      <strong>📌 역량 기준</strong>
+      <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;gap:8px;align-items:flex-start">
+          <span style="background:#16A34A;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;white-space:nowrap;margin-top:1px">기억나냐</span>
+          <span>자기 것이 있냐 / 차별화 아이디어 뭐냐 / 브랜드 한 단어가 뭐냐</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:flex-start">
+          <span style="background:#EA580C;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;white-space:nowrap;margin-top:1px">사고싶게만드냐</span>
+          <span>상품이 안 보이고 다른 게 보이냐 / 고급스럽냐 / 싼 거를 안 싸보이게 했냐</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:flex-start">
+          <span style="background:#2563EB;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;white-space:nowrap;margin-top:1px">요즘스럽냐</span>
+          <span>모델 &amp; 배경 / 코디 &amp; 스타일링 / 스토리 &amp; 모티브</span>
+        </div>
+      </div>
   </div>
 </section>
 
@@ -2565,9 +2655,29 @@ document.addEventListener('keydown', e => {
 
 // ── INIT ──────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
-  initAutoColorListeners(); // [신규] 자동 색상 갱신 리스너 등록
-  initAutoCalcListeners();  // [신규] KPI 자동계산 리스너 등록
-  initCardKpiListeners();   // [신규] 카드→별첨 역방향 동기화
+  // 관리자 상태 복원
+  updateAdminUI();
+
+  // 편집 모드 복원 (관리자 & 저장된 상태)
+  if (isAdmin()) {
+    const em = localStorage.getItem('edit-mode');
+    if (em === 'on') {
+      document.body.classList.remove('edit-off');
+      const btn = document.getElementById('edit-toggle-btn');
+      if (btn) { btn.textContent = '✏️ 편집 ON'; btn.className = 'edit-toggle-btn on'; }
+    } else {
+      document.body.classList.add('edit-off');
+    }
+  }
+
+  // 보기 모드 복원 (관리자만 report)
+  const savedMode = localStorage.getItem('view-mode');
+  if (savedMode === 'report' && isAdmin()) setViewMode('report');
+  else setViewMode('share');
+
+  initAutoColorListeners();
+  initAutoCalcListeners();
+  initCardKpiListeners();
   lpInitAll();
   loadEditableContent();
   loadLinks();
@@ -2669,25 +2779,171 @@ function lpInitAll() {
 
 
 // ── 뷰 모드 시스템 ───────────────────────────────────────────────────────
+
+// ── 관리자 인증 시스템 ─────────────────────────────────────────────────
+const DEFAULT_PW = 'eland2026';   // 초기 비밀번호 (변경 권장)
+let _pendingMode = null;
+
+function getAdminPw() {
+  return localStorage.getItem('admin-pw') || DEFAULT_PW;
+}
+
+function isAdmin() {
+  return sessionStorage.getItem('admin-auth') === 'true';
+}
+
+/** 보고용 클릭 → 관리자면 바로, 아니면 로그인 요구 */
+function reqReportMode() {
+  if (isAdmin()) {
+    setViewMode('report');
+  } else {
+    openAdminModal('report');
+  }
+}
+
+/** 관리자 모달 열기 */
+function openAdminModal(pendingMode) {
+  _pendingMode = pendingMode || null;
+  const titleEl = document.getElementById('admin-modal-title');
+  const descEl  = document.getElementById('admin-modal-desc');
+  if (titleEl) titleEl.textContent = '관리자 인증';
+  if (descEl)  descEl.textContent  = pendingMode === 'report'
+    ? '보고용 전체 지표를 보려면 관리자 비밀번호를 입력하세요.'
+    : '관리자 기능을 사용하려면 비밀번호를 입력하세요.';
+  const inp = document.getElementById('admin-pw-input');
+  if (inp) inp.value = '';
+  const err = document.getElementById('admin-err');
+  if (err) { err.style.display = 'none'; err.textContent = ''; }
+  document.getElementById('admin-modal').classList.add('open');
+  setTimeout(() => { if (inp) inp.focus(); }, 100);
+}
+
+function adminModalClose() {
+  document.getElementById('admin-modal').classList.remove('open');
+  _pendingMode = null;
+}
+
+function adminLogin() {
+  const inp = document.getElementById('admin-pw-input');
+  const err = document.getElementById('admin-err');
+  const pw  = inp ? inp.value : '';
+  if (pw !== getAdminPw()) {
+    inp.classList.add('error');
+    setTimeout(() => inp.classList.remove('error'), 300);
+    err.style.display = 'block';
+    err.textContent   = '비밀번호가 올바르지 않습니다.';
+    inp.value = ''; inp.focus();
+    return;
+  }
+  sessionStorage.setItem('admin-auth', 'true');
+  adminModalClose();
+  updateAdminUI();
+  if (_pendingMode) { setViewMode(_pendingMode); _pendingMode = null; }
+}
+
+function adminLogout() {
+  sessionStorage.removeItem('admin-auth');
+  updateAdminUI();
+  setViewMode('share');  // 로그아웃 시 공유용으로 전환
+}
+
+function updateAdminUI() {
+  const admin = isAdmin();
+  const indicator  = document.getElementById('admin-indicator');
+  const logoutBtn  = document.getElementById('admin-logout-btn');
+  const pwBtn      = document.getElementById('admin-pw-btn');
+  const loginBtn   = document.getElementById('admin-login-btn');
+  const editBtn    = document.getElementById('edit-toggle-btn');
+  const saveBtn    = document.getElementById('save-file-btn');
+  const shareSaveBtn = document.getElementById('share-save-btn');
+
+  if (indicator) indicator.style.display = admin ? 'inline-flex' : 'none';
+  if (logoutBtn) logoutBtn.style.display  = admin ? '' : 'none';
+  if (pwBtn)     pwBtn.style.display      = admin ? '' : 'none';
+  if (loginBtn)  loginBtn.style.display   = admin ? 'none' : '';
+
+  // 비관리자: 편집·파일저장 숨김
+  document.body.classList.toggle('non-admin', !admin);
+
+  // 비관리자이면 공유용 모드 강제
+  if (!admin) {
+    document.body.classList.add('designer-mode');
+    const btnS = document.getElementById('btn-share');
+    const btnR = document.getElementById('btn-report');
+    const desc = document.getElementById('mode-desc');
+    if (btnS) { btnS.classList.add('active','share'); }
+    if (btnR) { btnR.classList.remove('active'); }
+    if (desc) desc.textContent = '레벨(Lv) · 역량(○△✕) 제외 — KPI·포트폴리오 공유용';
+    // 편집 OFF
+    document.body.classList.add('edit-off');
+  }
+}
+
+function openPwChange() {
+  document.getElementById('pw-current').value = '';
+  document.getElementById('pw-new').value     = '';
+  document.getElementById('pw-confirm').value = '';
+  document.getElementById('pw-change-err').style.display = 'none';
+  document.getElementById('pw-change-modal').style.display = 'flex';
+  setTimeout(() => document.getElementById('pw-current').focus(), 100);
+}
+
+function changePw() {
+  const cur     = document.getElementById('pw-current').value;
+  const nw      = document.getElementById('pw-new').value;
+  const confirm = document.getElementById('pw-confirm').value;
+  const err     = document.getElementById('pw-change-err');
+
+  if (cur !== getAdminPw()) {
+    err.style.display = 'block'; err.textContent = '현재 비밀번호가 올바르지 않습니다.'; return;
+  }
+  if (nw.length < 4) {
+    err.style.display = 'block'; err.textContent = '비밀번호는 4자 이상이어야 합니다.'; return;
+  }
+  if (nw !== confirm) {
+    err.style.display = 'block'; err.textContent = '새 비밀번호가 일치하지 않습니다.'; return;
+  }
+  localStorage.setItem('admin-pw', nw);
+  document.getElementById('pw-change-modal').style.display = 'none';
+  alert('✅ 비밀번호가 변경되었습니다.');
+}
+
+// ── 편집 모드 토글 ──────────────────────────────────────────────────────
+function toggleEditMode() {
+  if (!isAdmin()) return;
+  const isOff = document.body.classList.toggle('edit-off');
+  const btn   = document.getElementById('edit-toggle-btn');
+  if (btn) {
+    btn.textContent = isOff ? '✏️ 편집 OFF' : '✏️ 편집 ON';
+    btn.className   = 'edit-toggle-btn ' + (isOff ? 'off' : 'on');
+  }
+  try { localStorage.setItem('edit-mode', isOff ? 'off' : 'on'); } catch(e) {}
+}
+
+/** 보기 모드 전환 (관리자만 report 가능) */
 function setViewMode(mode) {
-  const body     = document.body;
-  const btnR     = document.getElementById('btn-report');
-  const btnS     = document.getElementById('btn-share');
-  const desc     = document.getElementById('mode-desc');
+  if (mode === 'report' && !isAdmin()) {
+    openAdminModal('report'); return;
+  }
+  const body = document.body;
+  const btnR = document.getElementById('btn-report');
+  const btnS = document.getElementById('btn-share');
+  const desc = document.getElementById('mode-desc');
 
   if (mode === 'report') {
     body.classList.remove('designer-mode');
-    btnR.classList.add('active','report'); btnR.classList.remove('share');
-    btnS.classList.remove('active');
-    desc.textContent = '레벨평가 · 역량평가 · KPI 전체 지표 포함';
+    if (btnR) { btnR.classList.add('active','report'); btnR.classList.remove('share'); }
+    if (btnS) { btnS.classList.remove('active'); }
+    if (desc) desc.textContent = '레벨평가 · 역량평가 · KPI 전체 지표 포함';
   } else {
     body.classList.add('designer-mode');
-    btnS.classList.add('active','share'); btnS.classList.remove('report');
-    btnR.classList.remove('active');
-    desc.textContent = '레벨(Lv) · 역량(○△✕) 제외 — KPI·포트폴리오 공유용';
+    if (btnS) { btnS.classList.add('active','share'); btnS.classList.remove('report'); }
+    if (btnR) { btnR.classList.remove('active'); }
+    if (desc) desc.textContent = '레벨(Lv) · 역량(○△✕) 제외 — KPI·포트폴리오 공유용';
   }
   try { localStorage.setItem('view-mode', mode); } catch(e) {}
 }
+
 
 function printPage() {
   window.print();
@@ -2755,6 +3011,19 @@ function lbClickOutside(e) {
 
 // 키보드 단축키
 document.addEventListener('keydown', e => {
+  // ESC 키: 열린 모달 닫기
+  if (e.key === 'Escape') {
+    const adminModal  = document.getElementById('admin-modal');
+    const pwModal     = document.getElementById('pw-change-modal');
+    const lbEl        = document.getElementById('lightbox');
+    if (adminModal?.classList.contains('open')) { adminModalClose(); return; }
+    if (pwModal?.style.display === 'flex')      { pwModal.style.display = 'none'; return; }
+    if (lbEl?.classList.contains('open'))       { lbClose(); return; }
+    return;
+  }
+  // 모달 열려있으면 아래 단축키 차단
+  if (document.getElementById('admin-modal')?.classList.contains('open')) return;
+  if (document.getElementById('pw-change-modal')?.style.display === 'flex') return;
   if (!LB_DID) return;
   if (e.key === 'Escape')      { lbClose(); }
   else if (e.key === 'ArrowRight') { lbNav(1); }
@@ -3375,6 +3644,41 @@ function refreshLvOnly(did) {
     <div style="min-width:60px"></div>
     <div id="lb-caption"></div>
     <div id="lb-counter"></div>
+  </div>
+</div>
+
+
+<!-- 관리자 인증 모달 -->
+<div id="admin-modal">
+  <div class="admin-box">
+    <div class="admin-lock-icon">🔐</div>
+    <h2 id="admin-modal-title">관리자 인증</h2>
+    <p id="admin-modal-desc">보고용 전체 지표를 보려면 관리자 비밀번호를 입력하세요.</p>
+    <input type="password" id="admin-pw-input" class="admin-input"
+      placeholder="비밀번호 입력"
+      onkeydown="if(event.key==='Enter') adminLogin()">
+    <div class="admin-err" id="admin-err">비밀번호가 올바르지 않습니다.</div>
+    <div class="admin-btn-row">
+      <button class="admin-btn admin-btn-cancel" onclick="adminModalClose()">취소</button>
+      <button class="admin-btn admin-btn-primary" onclick="adminLogin()">확인</button>
+    </div>
+  </div>
+</div>
+
+<!-- 비밀번호 변경 모달 -->
+<div id="pw-change-modal" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.65);align-items:center;justify-content:center">
+  <div class="admin-box">
+    <div class="admin-lock-icon">🔑</div>
+    <h2>비밀번호 변경</h2>
+    <p>새 관리자 비밀번호를 설정합니다.</p>
+    <input type="password" id="pw-current" class="admin-input" placeholder="현재 비밀번호">
+    <input type="password" id="pw-new" class="admin-input" placeholder="새 비밀번호 (4자 이상)">
+    <input type="password" id="pw-confirm" class="admin-input" placeholder="새 비밀번호 확인">
+    <div class="admin-err" id="pw-change-err">비밀번호를 확인하세요.</div>
+    <div class="admin-btn-row">
+      <button class="admin-btn admin-btn-cancel" onclick="document.getElementById('pw-change-modal').style.display='none'">취소</button>
+      <button class="admin-btn admin-btn-primary" onclick="changePw()">변경</button>
+    </div>
   </div>
 </div>
 
