@@ -2494,10 +2494,26 @@ function loadEditableContent() {
   document.querySelectorAll('[data-key]').forEach(el => {
     const key = el.dataset.key;
     const saved = localStorage.getItem('ce-' + key);
-    if (saved !== null) el.innerHTML = saved;
-    el.addEventListener('blur', () => saveKey(key, el.innerHTML));
+    if (saved !== null) {
+      // "계산됨 🔄" 뱃지 제거 후 복원 (새로고침 시 뱃지 잔류 방지)
+      const cleaned = saved.replace(/<span class="auto-rate-badge"[^>]*>.*?<\/span>/g, '').trim();
+      el.innerHTML = cleaned;
+    }
+    el.addEventListener('blur',  () => saveKey(key, el.innerHTML));
     el.addEventListener('input', () => saveKey(key, el.innerHTML));
   });
+}
+
+/** [신규] 로드 후 전체 색상·스타일 재적용 (새로고침 시 색상 복원) */
+function restoreAllColors() {
+  const dids = ['d01','d02','d03','d04','d05','d06','d07',
+                'd08','d09','d10','d11','d12','d13','d14'];
+  // 1단계: localStorage 저장 색상 즉시 복원 (깜빡임 방지)
+  restoreColorStyles();
+  // 2단계: 현재 값 기준으로 색상 재계산 (정확성 보장)
+  dids.forEach(did => { refreshColors(did); refreshLvOnly(did); });
+  // 3단계: 재계산된 색상을 다시 저장
+  saveColorStyles();
 }
 
 function saveAll() {
@@ -2682,6 +2698,10 @@ window.addEventListener('DOMContentLoaded', () => {
   loadEditableContent();
   loadLinks();
   loadImages();
+
+  // [신규] 새로고침 후 색상 복원
+  restoreColorStyles();                          // 즉시 복원 (깜빡임 방지)
+  requestAnimationFrame(() => restoreAllColors()); // 재계산 후 확정
 });
 
 // ── 링크 관리 시스템 ────────────────────────────────────────────────────────
@@ -3302,6 +3322,8 @@ function refreshColors(did) {
 
   // ⑦ 저장
   saveKey(`sum-rate-${did}`, sumRateEl?.innerHTML || '');
+  // 색상 스타일 영구 저장
+  setTimeout(() => saveColorStyles(), 50);
 }
 
 /**
@@ -3630,6 +3652,70 @@ function refreshLvOnly(did) {
   const alvText = (sumAlvEl?.textContent || cardAlvEl?.textContent || '').trim();
   [sumDlvEl, cardDlvEl].forEach(el => { if (el) el.style.background = getLvBgColor(dlvText); });
   [sumAlvEl, cardAlvEl].forEach(el => { if (el) el.style.background = getLvBgColor(alvText); });
+}
+
+
+/** [신규] 색상 스타일을 localStorage에 영구 저장 */
+function saveColorStyles() {
+  const dids = ['d01','d02','d03','d04','d05','d06','d07',
+                'd08','d09','d10','d11','d12','d13','d14'];
+  dids.forEach(did => {
+    // bulb 색상 저장
+    const card = document.getElementById('card-' + did);
+    if (card) {
+      const bulbs = card.querySelectorAll('.bulb');
+      if (bulbs.length) {
+        localStorage.setItem('bulb-color-' + did, bulbs[0].style.background || '');
+        localStorage.setItem('bulb-shadow-' + did, bulbs[0].style.boxShadow || '');
+      }
+    }
+    // rate-badge 색상 저장
+    const rb = document.querySelector(`[data-key="rate-badge-${did}"]`);
+    if (rb) localStorage.setItem('rb-color-' + did, rb.style.color || '');
+    // kpi 색상 저장
+    const kpi = document.querySelector(`[data-key="kpi-${did}"]`);
+    if (kpi) localStorage.setItem('kpi-color-' + did, kpi.style.color || '');
+    // sum-rate 색상 저장
+    const sr = document.querySelector(`[data-key="sum-rate-${did}"]`);
+    if (sr) localStorage.setItem('sr-color-' + did, sr.style.color || '');
+  });
+}
+
+/** [신규] 저장된 색상 스타일 복원 */
+function restoreColorStyles() {
+  const dids = ['d01','d02','d03','d04','d05','d06','d07',
+                'd08','d09','d10','d11','d12','d13','d14'];
+  dids.forEach(did => {
+    const bulbColor  = localStorage.getItem('bulb-color-' + did);
+    const bulbShadow = localStorage.getItem('bulb-shadow-' + did);
+    const rbColor    = localStorage.getItem('rb-color-'   + did);
+    const kpiColor   = localStorage.getItem('kpi-color-'  + did);
+    const srColor    = localStorage.getItem('sr-color-'   + did);
+
+    // bulb 복원
+    if (bulbColor) {
+      const card = document.getElementById('card-' + did);
+      card?.querySelectorAll('.bulb').forEach(b => {
+        b.style.background = bulbColor;
+        if (bulbShadow) b.style.boxShadow = bulbShadow;
+      });
+    }
+    // rate-badge 복원
+    const rb = document.querySelector(`[data-key="rate-badge-${did}"]`);
+    if (rb && rbColor) rb.style.color = rbColor;
+    // kpi 복원
+    const kpi = document.querySelector(`[data-key="kpi-${did}"]`);
+    if (kpi && kpiColor) {
+      kpi.style.color = kpiColor;
+      const box = kpi.closest('.kpi-box');
+      if (box) box.style.borderColor = kpiColor;
+    }
+    // sum-rate 복원
+    const sr = document.querySelector(`[data-key="sum-rate-${did}"]`);
+    if (sr && srColor) sr.style.color = srColor;
+    // lv-badge 복원
+    refreshLvOnly(did);
+  });
 }
 
 </script>
