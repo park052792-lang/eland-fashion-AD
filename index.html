@@ -3557,8 +3557,6 @@ window.addEventListener('DOMContentLoaded', () => {
   lpInitAll();
   loadEditableContent();
   loadLinks();
-  loadImages(); // ✅ [버그수정] 새로고침 시 IndexedDB에서 이미지 자동 복원
-  loadImages(); // ✅ [버그수정] 새로고침 시 IndexedDB에서 이미지 자동 복원
 
   // [신규] 새로고침 후 색상 복원
   restoreColorStyles();                          // 즉시 복원 (깜빡임 방지)
@@ -3928,39 +3926,11 @@ document.getElementById('lightbox')?.addEventListener('touchend', e => {
 
 
 // ── 파일로 저장 (localStorage + DOM 상태 완전 내장) ──────────────────────
-async async function saveToFile() {
+function saveToFile() {
   const btn = document.getElementById('save-file-btn');
   if (btn) { btn.textContent = '⏳ 저장 중...'; btn.classList.add('saving'); }
 
-
-  // ✅ [버그수정] IndexedDB 이미지 → localStorage 덤프 (파일에 이미지 내장)
-  const _fdids=['d01','d02','d03','d04','d05','d06','d07','d08','d09','d10','d11','d12','d13','d14'];
-  for(const _fd of _fdids){
-    try{
-      const _fdb=await idbOpen();
-      const _fdat=await new Promise((r,j)=>{
-        const tx=_fdb.transaction(IDB_STORE,'readonly');
-        const req=tx.objectStore(IDB_STORE).get(_fd);
-        req.onsuccess=()=>r(req.result);req.onerror=()=>j(req.error);
-      });
-      if(_fdat?.images?.length) localStorage.setItem('portfolio_'+_fd,JSON.stringify(_fdat.images));
-    }catch(_fe){}
-  }
-
-  // ✅ [버그수정] IndexedDB 이미지 → localStorage 덤프 (파일에 이미지 내장)
-  const _fdids=['d01','d02','d03','d04','d05','d06','d07','d08','d09','d10','d11','d12','d13','d14'];
-  for(const _fd of _fdids){
-    try{
-      const _fdb=await idbOpen();
-      const _fdat=await new Promise((r,j)=>{
-        const tx=_fdb.transaction(IDB_STORE,'readonly');
-        const req=tx.objectStore(IDB_STORE).get(_fd);
-        req.onsuccess=()=>r(req.result);req.onerror=()=>j(req.error);
-      });
-      if(_fdat?.images?.length) localStorage.setItem('portfolio_'+_fd,JSON.stringify(_fdat.images));
-    }catch(_fe){}
-  }
-  // 1. 현재 localStorage 전체 수집 (이미지 포함) (이미지 포함)
+  // 1. 현재 localStorage 전체 수집
   const lsData = {};
   try {
     for (let i = 0; i < localStorage.length; i++) {
@@ -3980,33 +3950,6 @@ async async function saveToFile() {
 (function(){
   const D=${JSON.stringify(lsData)};
   try{ for(const[k,v] of Object.entries(D)) localStorage.setItem(k,v); }catch(e){}
-
-  // IndexedDB 이미지 복원 (저장 파일을 다른 기기에서 열어도 이미지 표시)
-  (async function(){
-    const _IDB='eland-portfolio',_ST='images';
-    const _ks=Object.keys(D).filter(k=>k.startsWith('portfolio_'));
-    if(!_ks.length) return;
-    try{
-      const db=await new Promise((r,j)=>{
-        const q=indexedDB.open(_IDB,1);
-        q.onupgradeneeded=e=>{const d=e.target.result;if(!d.objectStoreNames.contains(_ST))d.createObjectStore(_ST,{keyPath:'did'});};
-        q.onsuccess=e=>r(e.target.result);q.onerror=()=>j(q.error);
-      });
-      for(const k of _ks){
-        const did=k.replace('portfolio_','');
-        try{
-          const imgs=JSON.parse(D[k]);
-          if(Array.isArray(imgs)&&imgs.length){
-            await new Promise((r,j)=>{
-              const tx=db.transaction(_ST,'readwrite');
-              tx.objectStore(_ST).put({did,images:imgs});
-              tx.oncomplete=r;tx.onerror=()=>j(tx.error);
-            });
-          }
-        }catch(e){}
-      }
-    }catch(e){console.warn('IDB 복원 실패:',e);}
-  })();
 })();
 <\/script>`;
 
@@ -4030,25 +3973,11 @@ async async function saveToFile() {
 
 
 // ── 공유용 파일 저장 (보고용 완전 잠금) ──────────────────────────────────
-async async function saveToFileShare() {
+function saveToFileShare() {
   const btn = document.getElementById('share-save-btn');
   if (btn) { btn.textContent = '⏳ 생성 중...'; btn.style.pointerEvents = 'none'; }
 
-
-  // ✅ [버그수정] IndexedDB 이미지 → localStorage 덤프 (파일에 이미지 내장)
-  const _fdids=['d01','d02','d03','d04','d05','d06','d07','d08','d09','d10','d11','d12','d13','d14'];
-  for(const _fd of _fdids){
-    try{
-      const _fdb=await idbOpen();
-      const _fdat=await new Promise((r,j)=>{
-        const tx=_fdb.transaction(IDB_STORE,'readonly');
-        const req=tx.objectStore(IDB_STORE).get(_fd);
-        req.onsuccess=()=>r(req.result);req.onerror=()=>j(req.error);
-      });
-      if(_fdat?.images?.length) localStorage.setItem('portfolio_'+_fd,JSON.stringify(_fdat.images));
-    }catch(_fe){}
-  }
-  // 1. localStorage 수집 (이미지 포함) + 뷰모드 강제 share 고정
+  // 1. localStorage 수집 + 뷰모드 강제 share 고정
   const lsData = {};
   try {
     for (let i = 0; i < localStorage.length; i++) {
@@ -4082,33 +4011,6 @@ async async function saveToFileShare() {
 (function(){
   const D=${JSON.stringify(lsData)};
   try{ for(const[k,v] of Object.entries(D)) localStorage.setItem(k,v); }catch(e){}
-
-  // IndexedDB 이미지 복원 (저장 파일을 다른 기기에서 열어도 이미지 표시)
-  (async function(){
-    const _IDB='eland-portfolio',_ST='images';
-    const _ks=Object.keys(D).filter(k=>k.startsWith('portfolio_'));
-    if(!_ks.length) return;
-    try{
-      const db=await new Promise((r,j)=>{
-        const q=indexedDB.open(_IDB,1);
-        q.onupgradeneeded=e=>{const d=e.target.result;if(!d.objectStoreNames.contains(_ST))d.createObjectStore(_ST,{keyPath:'did'});};
-        q.onsuccess=e=>r(e.target.result);q.onerror=()=>j(q.error);
-      });
-      for(const k of _ks){
-        const did=k.replace('portfolio_','');
-        try{
-          const imgs=JSON.parse(D[k]);
-          if(Array.isArray(imgs)&&imgs.length){
-            await new Promise((r,j)=>{
-              const tx=db.transaction(_ST,'readwrite');
-              tx.objectStore(_ST).put({did,images:imgs});
-              tx.oncomplete=r;tx.onerror=()=>j(tx.error);
-            });
-          }
-        }catch(e){}
-      }
-    }catch(e){console.warn('IDB 복원 실패:',e);}
-  })();
 })();
 <\/script>`;
 
