@@ -330,6 +330,34 @@ body.edit-off [contenteditable]:hover{outline:none!important}
 body.non-admin #btn-report{display:none}
 body.non-admin .edit-toggle-btn{display:none}
 body.non-admin #save-file-btn{display:none}
+
+/* ─ 이미지 클라우드 설정 ─ */
+.cloud-setup-wrap{background:#F0F9FF;border:1px solid #BAE6FD;border-radius:8px;
+  padding:10px 14px;margin-bottom:10px;font-size:12px}
+.cloud-status{display:flex;align-items:center;gap:7px;margin-bottom:6px}
+.cloud-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.cloud-dot.ok{background:#059669;box-shadow:0 0 0 2px rgba(5,150,105,.25)}
+.cloud-dot.off{background:#D1D5DB}
+.cloud-key-row{display:flex;gap:6px;align-items:center}
+.cloud-key-inp{flex:1;border:1px solid #BAE6FD;border-radius:5px;
+  padding:4px 8px;font-size:11px;font-family:inherit;min-width:0}
+.cloud-key-inp:focus{outline:none;border-color:#2563EB}
+.cloud-save-btn{background:#0284C7;color:#fff;border:none;border-radius:5px;
+  padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap}
+.cloud-save-btn:hover{background:#0369A1}
+.upload-progress{display:none;font-size:11px;color:#0284C7;
+  margin-top:5px;font-weight:600;align-items:center;gap:5px}
+.upload-progress.show{display:flex}
+.upload-spinner{width:12px;height:12px;border:2px solid #BAE6FD;
+  border-top-color:#0284C7;border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* 이미지 저장 모드 표시 */
+.img-mode-badge{display:inline-block;font-size:9px;font-weight:700;
+  padding:1px 6px;border-radius:8px;margin-left:6px;vertical-align:middle}
+.img-mode-badge.cloud{background:#DBEAFE;color:#1E40AF}
+.img-mode-badge.local{background:#F3F4F6;color:#6B7280}
+/* 비관리자: 설정 숨김 */
+body.non-admin .cloud-setup-wrap{display:none}
 </style>
 </head>
 <body>
@@ -1190,6 +1218,21 @@ body.non-admin #save-file-btn{display:none}
 <div class="d-slides-wrap">
     <div class="slides-header">
       <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+      <div class="cloud-setup-wrap" id="cloud-wrap-d01">
+        <div class="cloud-status">
+          <span class="cloud-dot" id="cloud-dot-d01"></span>
+          <span id="cloud-label-d01" style="color:#6B7280;font-size:11px">이미지 클라우드 미연동 — 이 기기에서만 보임</span>
+        </div>
+        <div class="cloud-key-row">
+          <input type="text" class="cloud-key-inp" id="cloud-key-d01" placeholder="API Key 연동됨" oninput="syncApiKey(this.value)">
+          <button class="cloud-save-btn" onclick="saveApiKey('d01')">연동</button>
+          <button class="cloud-save-btn" style="background:#6B7280" onclick="openApiGuide()">?</button>
+        </div>
+        <div class="upload-progress" id="progress-d01">
+          <div class="upload-spinner"></div>
+          <span id="progress-text-d01">클라우드 업로드 중...</span>
+        </div>
+      </div>
       <div class="slides-toolbar">
         <label class="upload-btn" for="upload-d01">
           ＋ 이미지 추가
@@ -1276,6 +1319,21 @@ body.non-admin #save-file-btn{display:none}
 <div class="d-slides-wrap">
     <div class="slides-header">
       <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+      <div class="cloud-setup-wrap" id="cloud-wrap-d02">
+        <div class="cloud-status">
+          <span class="cloud-dot" id="cloud-dot-d02"></span>
+          <span id="cloud-label-d02" style="color:#6B7280;font-size:11px">이미지 클라우드 미연동 — 이 기기에서만 보임</span>
+        </div>
+        <div class="cloud-key-row">
+          <input type="text" class="cloud-key-inp" id="cloud-key-d02" placeholder="API Key 연동됨" oninput="syncApiKey(this.value)">
+          <button class="cloud-save-btn" onclick="saveApiKey('d02')">연동</button>
+          <button class="cloud-save-btn" style="background:#6B7280" onclick="openApiGuide()">?</button>
+        </div>
+        <div class="upload-progress" id="progress-d02">
+          <div class="upload-spinner"></div>
+          <span id="progress-text-d02">클라우드 업로드 중...</span>
+        </div>
+      </div>
       <div class="slides-toolbar">
         <label class="upload-btn" for="upload-d02">
           ＋ 이미지 추가
@@ -1363,6 +1421,21 @@ body.non-admin #save-file-btn{display:none}
 <div class="d-slides-wrap">
     <div class="slides-header">
       <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+      <div class="cloud-setup-wrap" id="cloud-wrap-d03">
+        <div class="cloud-status">
+          <span class="cloud-dot" id="cloud-dot-d03"></span>
+          <span id="cloud-label-d03" style="color:#6B7280;font-size:11px">이미지 클라우드 미연동 — 이 기기에서만 보임</span>
+        </div>
+        <div class="cloud-key-row">
+          <input type="text" class="cloud-key-inp" id="cloud-key-d03" placeholder="API Key 연동됨" oninput="syncApiKey(this.value)">
+          <button class="cloud-save-btn" onclick="saveApiKey('d03')">연동</button>
+          <button class="cloud-save-btn" style="background:#6B7280" onclick="openApiGuide()">?</button>
+        </div>
+        <div class="upload-progress" id="progress-d03">
+          <div class="upload-spinner"></div>
+          <span id="progress-text-d03">클라우드 업로드 중...</span>
+        </div>
+      </div>
       <div class="slides-toolbar">
         <label class="upload-btn" for="upload-d03">
           ＋ 이미지 추가
@@ -1449,6 +1522,21 @@ body.non-admin #save-file-btn{display:none}
 <div class="d-slides-wrap">
     <div class="slides-header">
       <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+      <div class="cloud-setup-wrap" id="cloud-wrap-d04">
+        <div class="cloud-status">
+          <span class="cloud-dot" id="cloud-dot-d04"></span>
+          <span id="cloud-label-d04" style="color:#6B7280;font-size:11px">이미지 클라우드 미연동 — 이 기기에서만 보임</span>
+        </div>
+        <div class="cloud-key-row">
+          <input type="text" class="cloud-key-inp" id="cloud-key-d04" placeholder="API Key 연동됨" oninput="syncApiKey(this.value)">
+          <button class="cloud-save-btn" onclick="saveApiKey('d04')">연동</button>
+          <button class="cloud-save-btn" style="background:#6B7280" onclick="openApiGuide()">?</button>
+        </div>
+        <div class="upload-progress" id="progress-d04">
+          <div class="upload-spinner"></div>
+          <span id="progress-text-d04">클라우드 업로드 중...</span>
+        </div>
+      </div>
       <div class="slides-toolbar">
         <label class="upload-btn" for="upload-d04">
           ＋ 이미지 추가
@@ -1546,6 +1634,21 @@ body.non-admin #save-file-btn{display:none}
 <div class="d-slides-wrap">
     <div class="slides-header">
       <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+      <div class="cloud-setup-wrap" id="cloud-wrap-d05">
+        <div class="cloud-status">
+          <span class="cloud-dot" id="cloud-dot-d05"></span>
+          <span id="cloud-label-d05" style="color:#6B7280;font-size:11px">이미지 클라우드 미연동 — 이 기기에서만 보임</span>
+        </div>
+        <div class="cloud-key-row">
+          <input type="text" class="cloud-key-inp" id="cloud-key-d05" placeholder="API Key 연동됨" oninput="syncApiKey(this.value)">
+          <button class="cloud-save-btn" onclick="saveApiKey('d05')">연동</button>
+          <button class="cloud-save-btn" style="background:#6B7280" onclick="openApiGuide()">?</button>
+        </div>
+        <div class="upload-progress" id="progress-d05">
+          <div class="upload-spinner"></div>
+          <span id="progress-text-d05">클라우드 업로드 중...</span>
+        </div>
+      </div>
       <div class="slides-toolbar">
         <label class="upload-btn" for="upload-d05">
           ＋ 이미지 추가
@@ -1642,6 +1745,21 @@ body.non-admin #save-file-btn{display:none}
 <div class="d-slides-wrap">
     <div class="slides-header">
       <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+      <div class="cloud-setup-wrap" id="cloud-wrap-d06">
+        <div class="cloud-status">
+          <span class="cloud-dot" id="cloud-dot-d06"></span>
+          <span id="cloud-label-d06" style="color:#6B7280;font-size:11px">이미지 클라우드 미연동 — 이 기기에서만 보임</span>
+        </div>
+        <div class="cloud-key-row">
+          <input type="text" class="cloud-key-inp" id="cloud-key-d06" placeholder="API Key 연동됨" oninput="syncApiKey(this.value)">
+          <button class="cloud-save-btn" onclick="saveApiKey('d06')">연동</button>
+          <button class="cloud-save-btn" style="background:#6B7280" onclick="openApiGuide()">?</button>
+        </div>
+        <div class="upload-progress" id="progress-d06">
+          <div class="upload-spinner"></div>
+          <span id="progress-text-d06">클라우드 업로드 중...</span>
+        </div>
+      </div>
       <div class="slides-toolbar">
         <label class="upload-btn" for="upload-d06">
           ＋ 이미지 추가
@@ -1728,6 +1846,21 @@ body.non-admin #save-file-btn{display:none}
 <div class="d-slides-wrap">
     <div class="slides-header">
       <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+      <div class="cloud-setup-wrap" id="cloud-wrap-d07">
+        <div class="cloud-status">
+          <span class="cloud-dot" id="cloud-dot-d07"></span>
+          <span id="cloud-label-d07" style="color:#6B7280;font-size:11px">이미지 클라우드 미연동 — 이 기기에서만 보임</span>
+        </div>
+        <div class="cloud-key-row">
+          <input type="text" class="cloud-key-inp" id="cloud-key-d07" placeholder="API Key 연동됨" oninput="syncApiKey(this.value)">
+          <button class="cloud-save-btn" onclick="saveApiKey('d07')">연동</button>
+          <button class="cloud-save-btn" style="background:#6B7280" onclick="openApiGuide()">?</button>
+        </div>
+        <div class="upload-progress" id="progress-d07">
+          <div class="upload-spinner"></div>
+          <span id="progress-text-d07">클라우드 업로드 중...</span>
+        </div>
+      </div>
       <div class="slides-toolbar">
         <label class="upload-btn" for="upload-d07">
           ＋ 이미지 추가
@@ -1814,6 +1947,21 @@ body.non-admin #save-file-btn{display:none}
 <div class="d-slides-wrap">
     <div class="slides-header">
       <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+      <div class="cloud-setup-wrap" id="cloud-wrap-d08">
+        <div class="cloud-status">
+          <span class="cloud-dot" id="cloud-dot-d08"></span>
+          <span id="cloud-label-d08" style="color:#6B7280;font-size:11px">이미지 클라우드 미연동 — 이 기기에서만 보임</span>
+        </div>
+        <div class="cloud-key-row">
+          <input type="text" class="cloud-key-inp" id="cloud-key-d08" placeholder="API Key 연동됨" oninput="syncApiKey(this.value)">
+          <button class="cloud-save-btn" onclick="saveApiKey('d08')">연동</button>
+          <button class="cloud-save-btn" style="background:#6B7280" onclick="openApiGuide()">?</button>
+        </div>
+        <div class="upload-progress" id="progress-d08">
+          <div class="upload-spinner"></div>
+          <span id="progress-text-d08">클라우드 업로드 중...</span>
+        </div>
+      </div>
       <div class="slides-toolbar">
         <label class="upload-btn" for="upload-d08">
           ＋ 이미지 추가
@@ -1910,6 +2058,21 @@ body.non-admin #save-file-btn{display:none}
 <div class="d-slides-wrap">
     <div class="slides-header">
       <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+      <div class="cloud-setup-wrap" id="cloud-wrap-d09">
+        <div class="cloud-status">
+          <span class="cloud-dot" id="cloud-dot-d09"></span>
+          <span id="cloud-label-d09" style="color:#6B7280;font-size:11px">이미지 클라우드 미연동 — 이 기기에서만 보임</span>
+        </div>
+        <div class="cloud-key-row">
+          <input type="text" class="cloud-key-inp" id="cloud-key-d09" placeholder="API Key 연동됨" oninput="syncApiKey(this.value)">
+          <button class="cloud-save-btn" onclick="saveApiKey('d09')">연동</button>
+          <button class="cloud-save-btn" style="background:#6B7280" onclick="openApiGuide()">?</button>
+        </div>
+        <div class="upload-progress" id="progress-d09">
+          <div class="upload-spinner"></div>
+          <span id="progress-text-d09">클라우드 업로드 중...</span>
+        </div>
+      </div>
       <div class="slides-toolbar">
         <label class="upload-btn" for="upload-d09">
           ＋ 이미지 추가
@@ -1996,6 +2159,21 @@ body.non-admin #save-file-btn{display:none}
 <div class="d-slides-wrap">
     <div class="slides-header">
       <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+      <div class="cloud-setup-wrap" id="cloud-wrap-d10">
+        <div class="cloud-status">
+          <span class="cloud-dot" id="cloud-dot-d10"></span>
+          <span id="cloud-label-d10" style="color:#6B7280;font-size:11px">이미지 클라우드 미연동 — 이 기기에서만 보임</span>
+        </div>
+        <div class="cloud-key-row">
+          <input type="text" class="cloud-key-inp" id="cloud-key-d10" placeholder="API Key 연동됨" oninput="syncApiKey(this.value)">
+          <button class="cloud-save-btn" onclick="saveApiKey('d10')">연동</button>
+          <button class="cloud-save-btn" style="background:#6B7280" onclick="openApiGuide()">?</button>
+        </div>
+        <div class="upload-progress" id="progress-d10">
+          <div class="upload-spinner"></div>
+          <span id="progress-text-d10">클라우드 업로드 중...</span>
+        </div>
+      </div>
       <div class="slides-toolbar">
         <label class="upload-btn" for="upload-d10">
           ＋ 이미지 추가
@@ -2093,6 +2271,21 @@ body.non-admin #save-file-btn{display:none}
 <div class="d-slides-wrap">
     <div class="slides-header">
       <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+      <div class="cloud-setup-wrap" id="cloud-wrap-d11">
+        <div class="cloud-status">
+          <span class="cloud-dot" id="cloud-dot-d11"></span>
+          <span id="cloud-label-d11" style="color:#6B7280;font-size:11px">이미지 클라우드 미연동 — 이 기기에서만 보임</span>
+        </div>
+        <div class="cloud-key-row">
+          <input type="text" class="cloud-key-inp" id="cloud-key-d11" placeholder="API Key 연동됨" oninput="syncApiKey(this.value)">
+          <button class="cloud-save-btn" onclick="saveApiKey('d11')">연동</button>
+          <button class="cloud-save-btn" style="background:#6B7280" onclick="openApiGuide()">?</button>
+        </div>
+        <div class="upload-progress" id="progress-d11">
+          <div class="upload-spinner"></div>
+          <span id="progress-text-d11">클라우드 업로드 중...</span>
+        </div>
+      </div>
       <div class="slides-toolbar">
         <label class="upload-btn" for="upload-d11">
           ＋ 이미지 추가
@@ -2189,6 +2382,21 @@ body.non-admin #save-file-btn{display:none}
 <div class="d-slides-wrap">
     <div class="slides-header">
       <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+      <div class="cloud-setup-wrap" id="cloud-wrap-d12">
+        <div class="cloud-status">
+          <span class="cloud-dot" id="cloud-dot-d12"></span>
+          <span id="cloud-label-d12" style="color:#6B7280;font-size:11px">이미지 클라우드 미연동 — 이 기기에서만 보임</span>
+        </div>
+        <div class="cloud-key-row">
+          <input type="text" class="cloud-key-inp" id="cloud-key-d12" placeholder="API Key 연동됨" oninput="syncApiKey(this.value)">
+          <button class="cloud-save-btn" onclick="saveApiKey('d12')">연동</button>
+          <button class="cloud-save-btn" style="background:#6B7280" onclick="openApiGuide()">?</button>
+        </div>
+        <div class="upload-progress" id="progress-d12">
+          <div class="upload-spinner"></div>
+          <span id="progress-text-d12">클라우드 업로드 중...</span>
+        </div>
+      </div>
       <div class="slides-toolbar">
         <label class="upload-btn" for="upload-d12">
           ＋ 이미지 추가
@@ -2286,6 +2494,21 @@ body.non-admin #save-file-btn{display:none}
 <div class="d-slides-wrap">
     <div class="slides-header">
       <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+      <div class="cloud-setup-wrap" id="cloud-wrap-d13">
+        <div class="cloud-status">
+          <span class="cloud-dot" id="cloud-dot-d13"></span>
+          <span id="cloud-label-d13" style="color:#6B7280;font-size:11px">이미지 클라우드 미연동 — 이 기기에서만 보임</span>
+        </div>
+        <div class="cloud-key-row">
+          <input type="text" class="cloud-key-inp" id="cloud-key-d13" placeholder="API Key 연동됨" oninput="syncApiKey(this.value)">
+          <button class="cloud-save-btn" onclick="saveApiKey('d13')">연동</button>
+          <button class="cloud-save-btn" style="background:#6B7280" onclick="openApiGuide()">?</button>
+        </div>
+        <div class="upload-progress" id="progress-d13">
+          <div class="upload-spinner"></div>
+          <span id="progress-text-d13">클라우드 업로드 중...</span>
+        </div>
+      </div>
       <div class="slides-toolbar">
         <label class="upload-btn" for="upload-d13">
           ＋ 이미지 추가
@@ -2383,6 +2606,21 @@ body.non-admin #save-file-btn{display:none}
 <div class="d-slides-wrap">
     <div class="slides-header">
       <span class="sec-label" style="margin:0">🖼️ 포트폴리오 이미지</span>
+      <div class="cloud-setup-wrap" id="cloud-wrap-d14">
+        <div class="cloud-status">
+          <span class="cloud-dot" id="cloud-dot-d14"></span>
+          <span id="cloud-label-d14" style="color:#6B7280;font-size:11px">이미지 클라우드 미연동 — 이 기기에서만 보임</span>
+        </div>
+        <div class="cloud-key-row">
+          <input type="text" class="cloud-key-inp" id="cloud-key-d14" placeholder="API Key 연동됨" oninput="syncApiKey(this.value)">
+          <button class="cloud-save-btn" onclick="saveApiKey('d14')">연동</button>
+          <button class="cloud-save-btn" style="background:#6B7280" onclick="openApiGuide()">?</button>
+        </div>
+        <div class="upload-progress" id="progress-d14">
+          <div class="upload-spinner"></div>
+          <span id="progress-text-d14">클라우드 업로드 중...</span>
+        </div>
+      </div>
       <div class="slides-toolbar">
         <label class="upload-btn" for="upload-d14">
           ＋ 이미지 추가
@@ -2678,7 +2916,10 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // [신규] 새로고침 후 색상 복원
   restoreColorStyles();                          // 즉시 복원 (깜빡임 방지)
-  requestAnimationFrame(() => restoreAllColors()); // 재계산 후 확정
+  requestAnimationFrame(() => restoreAllColors());
+  // API Key 자동 세팅
+  if (!localStorage.getItem('imgbb-api-key')) localStorage.setItem('imgbb-api-key', '651d655972b22a46089b521b347dff8b');
+  updateCloudUI(); // 클라우드 상태 UI 갱신 // 재계산 후 확정
 });
 
 // ── 링크 관리 시스템 ────────────────────────────────────────────────────────
@@ -3891,6 +4132,153 @@ async function _execSaveWithImages(isShare) {
       btn.style.pointerEvents = '';
     }
   }
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// 이미지 클라우드 시스템 (imgBB 무료 API 연동)
+// 설정 시: 업로드 이미지 → 클라우드 → URL로 저장 → 모든 방문자 공유
+// 미설정:  IndexedDB로 폴백 (이 기기에서만 유지)
+// ══════════════════════════════════════════════════════════════════════════
+
+const IMGBB_UPLOAD_URL = 'https://api.imgbb.com/1/upload';
+
+function getApiKey() {
+  return localStorage.getItem('imgbb-api-key') || '651d655972b22a46089b521b347dff8b';
+}
+
+function saveApiKey(did) {
+  const inp = document.getElementById('cloud-key-' + did);
+  const key = inp ? inp.value.trim() : '';
+  if (!key) { alert('API Key를 입력해주세요.'); return; }
+  localStorage.setItem('imgbb-api-key', key);
+  // 전체 디자이너 UI 갱신
+  syncApiKey(key);
+  alert('✅ API Key가 저장되었습니다.\n이제 이미지를 업로드하면 클라우드에 자동 저장됩니다.');
+}
+
+/** API Key 변경 시 전체 필드 동기화 */
+function syncApiKey(val) {
+  document.querySelectorAll('[id^="cloud-key-"]').forEach(inp => {
+    if (inp.value !== val) inp.value = val;
+  });
+  updateCloudUI();
+}
+
+function updateCloudUI() {
+  const key = getApiKey();
+  const dids = ['d01','d02','d03','d04','d05','d06','d07',
+                'd08','d09','d10','d11','d12','d13','d14'];
+  dids.forEach(did => {
+    const dot   = document.getElementById('cloud-dot-'   + did);
+    const label = document.getElementById('cloud-label-' + did);
+    const inp   = document.getElementById('cloud-key-'   + did);
+    if (dot)   dot.className   = 'cloud-dot ' + (key ? 'ok' : 'off');
+    if (label) label.textContent = key
+      ? '🌐 클라우드 연동됨 — 모든 방문자에게 이미지가 표시됩니다'
+      : '이미지 클라우드 연동 안 됨 (이 기기에서만 보임)';
+    if (label) label.style.color = key ? '#059669' : '#6B7280';
+    if (inp && !inp.value) inp.value = key;
+  });
+}
+
+function openApiGuide() {
+  alert(
+    '📋 imgBB 무료 API Key 발급 방법\n\n' +
+    '1. https://imgbb.com 접속 → 무료 회원가입\n' +
+    '2. 상단 우측 프로필 → "API" 클릭\n' +
+    '3. "Get API key" → API Key 복사\n' +
+    '4. 위 입력란에 붙여넣기 → 연동 클릭\n\n' +
+    '✅ 무료 플랜: 무제한 업로드\n' +
+    '✅ 이미지 영구 보존\n' +
+    '✅ 모든 방문자가 동일하게 이미지를 볼 수 있습니다'
+  );
+}
+
+/** imgBB에 base64 이미지 업로드 → URL 반환 */
+async function uploadToCloud(base64Data, fileName) {
+  const key = getApiKey();
+  if (!key) return null;
+
+  // data:image/jpeg;base64,xxxx → xxxx 만 추출
+  const base64 = base64Data.replace(/^data:[^;]+;base64,/, '');
+
+  const form = new FormData();
+  form.append('key', key);
+  form.append('image', base64);
+  form.append('name', fileName || 'portfolio');
+
+  const res = await fetch(IMGBB_UPLOAD_URL, { method: 'POST', body: form });
+  if (!res.ok) throw new Error('업로드 실패: ' + res.status);
+  const json = await res.json();
+  if (!json.success) throw new Error(json.error?.message || '업로드 실패');
+  return json.data.url;   // 직접 접근 가능한 이미지 URL 반환
+}
+
+/** 이미지 추가 (클라우드 우선, 폴백 IndexedDB) */
+function addImages(did, input) {
+  const files = Array.from(input.files);
+  if (!files.length) return;
+  input.value = '';
+
+  const key = getApiKey();
+  let processed = 0;
+
+  if (key) {
+    // ── 클라우드 업로드 모드 ──────────────────────────────────────────
+    const prog     = document.getElementById('progress-' + did);
+    const progText = document.getElementById('progress-text-' + did);
+    if (prog) prog.classList.add('show');
+
+    files.forEach(file => {
+      compressImage(file, async (compressed) => {
+        try {
+          if (progText) progText.textContent = `업로드 중... (${file.name})`;
+          const url = await uploadToCloud(compressed.src, file.name);
+          // URL로 저장 (용량 0, 모든 방문자 공유 가능)
+          getState(did).images.push({ src: url, name: file.name, cloud: true });
+        } catch(err) {
+          console.warn('클라우드 업로드 실패, 로컬 저장:', err);
+          getState(did).images.push({ src: compressed.src, name: file.name });
+        } finally {
+          processed++;
+          if (processed === files.length) {
+            if (prog) prog.classList.remove('show');
+            saveImages(did);
+            renderSlideshow(did);
+          }
+        }
+      });
+    });
+  } else {
+    // ── 로컬(IndexedDB) 모드 ─────────────────────────────────────────
+    files.forEach(file => {
+      compressImage(file, (compressed) => {
+        getState(did).images.push({ src: compressed.src, name: file.name });
+        processed++;
+        if (processed === files.length) {
+          saveImages(did);
+          renderSlideshow(did);
+        }
+      });
+    });
+  }
+}
+
+/** addImageByUrl도 클라우드 연동 시 URL 직접 저장 */
+function addImageByUrl(did) {
+  const srcEl   = document.getElementById('url-src-'   + did);
+  const titleEl = document.getElementById('url-title-' + did);
+  if (!srcEl) return;
+  const url   = srcEl.value.trim();
+  const title = titleEl ? titleEl.value.trim() : '';
+  if (!url) { srcEl.focus(); return; }
+  if (!/^https?:\/\//i.test(url)) { alert('https:// 로 시작하는 URL을 입력해주세요.'); srcEl.focus(); return; }
+  getState(did).images.push({ src: url, name: title || url.split('/').pop().slice(0,40), cloud: true });
+  saveImages(did);
+  renderSlideshow(did);
+  srcEl.value = '';
+  if (titleEl) titleEl.value = '';
 }
 
 </script>
