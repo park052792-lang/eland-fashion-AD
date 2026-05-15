@@ -2841,6 +2841,7 @@ function clearImages(did) {
   if (!confirm('포트폴리오 이미지를 모두 삭제할까요?')) return;
   getState(did).images = []; getState(did).cur = 0;
   try { localStorage.removeItem('portfolio_' + did); } catch(e) {}
+  saveImages(did);
   renderSlideshow(did);
 }
 
@@ -2958,7 +2959,17 @@ window.addEventListener('DOMContentLoaded', () => {
   // API Key 자동 세팅
   if (!localStorage.getItem('imgbb-api-key')) localStorage.setItem('imgbb-api-key', '651d655972b22a46089b521b347dff8b');
   updateCloudUI(); // 클라우드 상태 UI 갱신 // 재계산 후 확정
-  loadImages(); // 새로고침 후 포트폴리오 이미지 복원
+  // localStorage에서 즉시 동기 복원 (IndexedDB 로드 전 깜빡임 방지)
+  ['d01','d02','d03','d04','d05','d06','d07','d08','d09','d10','d11','d12','d13','d14'].forEach(did => {
+    try {
+      const ls = localStorage.getItem('portfolio_' + did);
+      if (ls) {
+        const imgs = JSON.parse(ls);
+        if (imgs?.length) { getState(did).images = imgs; getState(did).cur = 0; renderSlideshow(did); }
+      }
+    } catch(e) {}
+  });
+  loadImages(); // IndexedDB에서 추가 업데이트
 });
 
 // ── 링크 관리 시스템 ────────────────────────────────────────────────────────
@@ -4004,6 +4015,8 @@ function idbOpen() {
 /** IndexedDB에 이미지 배열 저장 */
 async function saveImages(did) {
   const images = getState(did).images;
+  // localStorage에 즉시 동기 저장 (항상 백업 — 새로고침 후 즉시 복원용)
+  try { localStorage.setItem('portfolio_' + did, JSON.stringify(images)); } catch(_) {}
   try {
     const db = await idbOpen();
     await new Promise((res, rej) => {
@@ -4014,9 +4027,7 @@ async function saveImages(did) {
     });
     showSaveBadge(did);           // 저장 완료 피드백
   } catch(e) {
-    console.warn('IndexedDB 저장 실패, localStorage로 대체:', e);
-    // fallback: localStorage
-    try { localStorage.setItem('portfolio_' + did, JSON.stringify(images)); } catch(_) {}
+    console.warn('IndexedDB 저장 실패:', e);
   }
 }
 
@@ -4043,8 +4054,7 @@ async function loadImagesForDid(did) {
           getState(did).images = imgs;
           getState(did).cur    = 0;
           renderSlideshow(did);
-          saveImages(did);   // IndexedDB로 마이그레이션
-          localStorage.removeItem('portfolio_' + did);
+          saveImages(did);   // IndexedDB로 마이그레이션 (localStorage 백업은 유지)
         }
       }
     }
