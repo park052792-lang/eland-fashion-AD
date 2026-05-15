@@ -382,6 +382,33 @@ body.non-admin .cloud-setup-wrap{display:none}
 @keyframes pulse{from{opacity:.4}to{opacity:1}}
 body.non-admin .share-store-wrap{display:none}
 body.non-admin .cloud-setup-wrap{display:none}
+
+/* ─ GitHub 연동 상태 표시 ─ */
+#gh-status-bar{
+  display:none;align-items:center;gap:8px;padding:7px 16px;
+  font-size:11px;font-weight:600;border-radius:0;
+  border-bottom:2px solid transparent;transition:all .3s
+}
+#gh-status-bar.idle   {display:flex;background:#F0FDF4;border-color:#BBF7D0;color:#166534}
+#gh-status-bar.saving {display:flex;background:#FEF9C3;border-color:#FDE047;color:#713F12}
+#gh-status-bar.error  {display:flex;background:#FEF2F2;border-color:#FECACA;color:#991B1B}
+.gh-spinner{width:12px;height:12px;border:2px solid currentColor;
+  border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite;flex-shrink:0}
+/* GitHub 설정 패널 */
+.gh-setup-panel{
+  background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;
+  padding:16px;margin-bottom:16px
+}
+.gh-setup-row{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
+.gh-inp{flex:1;min-width:120px;border:1px solid #CBD5E1;border-radius:6px;
+  padding:6px 10px;font-size:12px;font-family:inherit}
+.gh-inp:focus{outline:none;border-color:#2563EB}
+.gh-btn{background:#24292F;color:#fff;border:none;border-radius:6px;
+  padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
+.gh-btn:hover{background:#444}
+.gh-btn-sm{padding:5px 10px;font-size:11px}
+body.non-admin .gh-setup-panel{display:none}
+body.non-admin #gh-status-bar{display:none}
 </style>
 </head>
 <body>
@@ -416,14 +443,15 @@ body.non-admin .cloud-setup-wrap{display:none}
 
 <nav><a href="#summary" class="nav-a report-only" style="color:#374151;background:#F1F5F9;border-color:#E2E8F0">📋 전체 요약</a><a href="#스파오" class="nav-a" style="color:#C0392B;background:#FFF5F3;border-color:#FECACA">스파오</a><a href="#후아유" class="nav-a" style="color:#1D4ED8;background:#EFF6FF;border-color:#BFDBFE">후아유</a><a href="#뉴발란스" class="nav-a" style="color:#15803D;background:#F0FDF4;border-color:#BBF7D0">뉴발란스</a><a href="#뉴발란스키즈" class="nav-a" style="color:#15803D;background:#F0FDF4;border-color:#BBF7D0">뉴발란스키즈</a><a href="#슈펜_오찌" class="nav-a" style="color:#B45309;background:#FFFBEB;border-color:#FDE68A">슈펜/오찌</a><a href="#미쏘" class="nav-a" style="color:#9D174D;background:#FDF2F8;border-color:#FBCFE8">미쏘</a><a href="#로엠" class="nav-a" style="color:#075985;background:#F0F9FF;border-color:#BAE6FD">로엠</a><a href="#클라비스_에블린" class="nav-a" style="color:#1F2937;background:#F9FAFB;border-color:#D1D5DB">클라비스/에블린</a></nav>
 
+
+<!-- GitHub 연동 상태 표시 -->
+<div id="gh-status-bar">
+  <div class="gh-spinner" id="gh-spinner" style="display:none"></div>
+  <span id="gh-status-text">✓ GitHub 연동됨</span>
+  <span id="gh-last-saved" style="opacity:.6;font-weight:400"></span>
+</div>
 <main class="main">
 
-<!-- 공유 저장소 설정 (관리자 전용) -->
-<div class="share-store-wrap" id="share-store-wrap">
-  <div class="share-store-status">
-    <span class="ssdot" id="jb-dot"></span>
-    <span id="jb-status-text" style="color:#92400E">공유 저장소 미연동 — 이 기기에서만 이미지 보임</span>
-  </div>
   <div class="share-store-row">
     <input type="text" class="share-store-inp" id="jb-key-inp"
       placeholder="GitHub Personal Access Token 입력 (gist 권한 필요)">
@@ -450,6 +478,25 @@ body.non-admin .cloud-setup-wrap{display:none}
     <button class="admin-menu-btn" id="admin-pw-btn" style="display:none" onclick="openPwChange()">🔑 비밀번호 변경</button>
     <button class="admin-menu-btn" id="admin-login-btn" onclick="openAdminModal('report')">🔐 관리자 로그인</button>
   </div>
+</div>
+
+<!-- GitHub 설정 패널 (관리자 전용) -->
+<div class="gh-setup-panel" id="gh-setup-panel">
+  <div style="font-size:13px;font-weight:700;margin-bottom:4px">
+    ☁️ GitHub 연동 — 변경사항을 모든 방문자에게 자동 반영
+  </div>
+  <div style="font-size:11px;color:#64748B;margin-bottom:8px">
+    토큰·저장소 입력 후 연동하면 이미지·텍스트 수정 내용이 GitHub에 자동 저장됩니다.
+  </div>
+  <div class="gh-setup-row">
+    <input class="gh-inp" id="gh-token-inp"  type="password" placeholder="GitHub Personal Access Token (repo 권한)">
+    <input class="gh-inp" id="gh-owner-inp"  type="text"     placeholder="GitHub 사용자명 (예: elandworld)">
+    <input class="gh-inp" id="gh-repo-inp"   type="text"     placeholder="저장소명 (예: portfolio)">
+    <input class="gh-inp" id="gh-branch-inp" type="text"     placeholder="브랜치 (기본: main)" style="max-width:120px">
+    <button class="gh-btn gh-btn-sm" onclick="connectGitHub()">🔗 연동</button>
+    <button class="gh-btn gh-btn-sm" style="background:#6B7280" onclick="openGHGuide()">?</button>
+  </div>
+  <div id="gh-setup-status" style="font-size:11px;color:#64748B;margin-top:6px"></div>
 </div>
 <div class="edit-mode-bar" style="display:none" id="edit-mode-bar-legacy">
   ✏️ <strong>편집 모드 활성화</strong> — 텍스트 클릭 시 바로 수정 가능. <b>📥 파일로 저장</b>을 눌러야 다음에 열어도 유지됩니다. &nbsp;
@@ -2765,6 +2812,7 @@ function saveLink(itemId, url, text) {
 // ── CONTENTEDITABLE SAVE / LOAD ───────────────────────────────────────────
 function saveKey(key, value) {
   try { localStorage.setItem('ce-' + key, value); } catch(e) {}
+  scheduleGHSave('내용 수정');
 }
 
 function loadEditableContent() {
@@ -2795,6 +2843,7 @@ function restoreAllColors() {
 
 function saveAll() {
   document.querySelectorAll('[data-key]').forEach(el => saveKey(el.dataset.key, el.innerHTML));
+  saveToGitHub('수동 저장');
   const btn = event.target;
   btn.textContent = '✅ 저장됨';
   setTimeout(() => btn.textContent = '💾 저장', 1500);
@@ -2972,6 +3021,7 @@ function lpGetData(did) {
 
 function lpSave(did, data) {
   try { localStorage.setItem('lp-data-' + did, JSON.stringify(data)); } catch(e) {}
+  scheduleGHSave('링크 업데이트');
 }
 
 function lpRender(did) {
@@ -4011,7 +4061,8 @@ async function saveImages(did) {
       tx.oncomplete = res;
       tx.onerror    = () => rej(tx.error);
     });
-    showSaveBadge(did);           // 저장 완료 피드백
+    showSaveBadge(did);
+  scheduleGHSave('이미지 업데이트');
   } catch(e) {
     console.warn('IndexedDB 저장 실패, localStorage로 대체:', e);
     // fallback: localStorage
@@ -4323,184 +4374,223 @@ function addImageByUrl(did) {
 
 
 
+
+
+
 // ══════════════════════════════════════════════════════════════════════════
-// 공유 이미지 저장소 — GitHub Gist API
-// GitHub 계정 1개 + 토큰으로 모든 방문자가 동일한 이미지를 볼 수 있음
+// GitHub 자동 저장 시스템
+// 이미지·텍스트·링크 변경 → GitHub 레포에 index.html 자동 커밋
+// → GitHub Pages 자동 배포 → 모든 방문자 동일 내용 확인
 // ══════════════════════════════════════════════════════════════════════════
 
-const GH_API = 'https://api.github.com';
+function ghToken()  { return localStorage.getItem('gh-token')  || ''; }
+function ghOwner()  { return localStorage.getItem('gh-owner')  || ''; }
+function ghRepo()   { return localStorage.getItem('gh-repo')   || ''; }
+function ghBranch() { return localStorage.getItem('gh-branch') || 'main'; }
+function ghReady()  { return !!(ghToken() && ghOwner() && ghRepo()); }
 
-function getGHToken()  { return localStorage.getItem('gh-token')   || ''; }
-function getGHGistId() { return localStorage.getItem('gh-gist-id') || ''; }
+/** GitHub 연동 설정 저장 */
+async function connectGitHub() {
+  const token  = document.getElementById('gh-token-inp')?.value.trim();
+  const owner  = document.getElementById('gh-owner-inp')?.value.trim();
+  const repo   = document.getElementById('gh-repo-inp')?.value.trim();
+  const branch = document.getElementById('gh-branch-inp')?.value.trim() || 'main';
+  const status = document.getElementById('gh-setup-status');
 
-/** Gist에서 이미지 URL 데이터 읽기 (공개 Gist는 토큰 불필요) */
-async function jbRead() {
-  const gistId = getGHGistId();
-  if (!gistId) return null;
+  if (!token || !owner || !repo) { alert('토큰, 사용자명, 저장소명을 모두 입력해주세요.'); return; }
+  if (status) status.textContent = '연결 확인 중...';
+
+  // 레포 접근 테스트
   try {
-    const headers = { 'Accept': 'application/vnd.github+json' };
-    const token = getGHToken();
-    if (token) headers['Authorization'] = 'Bearer ' + token;
-    const res = await fetch(`${GH_API}/gists/${gistId}`, { headers });
-    if (!res.ok) return null;
-    const json = await res.json();
-    const content = json.files?.['portfolio.json']?.content;
-    return content ? JSON.parse(content) : {};
-  } catch(e) { return null; }
-}
-
-/** Gist에 이미지 URL 데이터 저장 (토큰 필요) */
-async function jbWrite(data) {
-  const token  = getGHToken();
-  const gistId = getGHGistId();
-  if (!token || !gistId) return false;
-  try {
-    const res = await fetch(`${GH_API}/gists/${gistId}`, {
-      method: 'PATCH',
-      headers: {
-        'Accept':        'application/vnd.github+json',
-        'Authorization': 'Bearer ' + token,
-        'Content-Type':  'application/json'
-      },
-      body: JSON.stringify({
-        files: { 'portfolio.json': { content: JSON.stringify(data) } }
-      })
+    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+      headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github+json' }
     });
-    return res.ok;
-  } catch(e) { return false; }
-}
+    if (!res.ok) throw new Error('레포를 찾을 수 없습니다 (' + res.status + ')');
 
-/** Gist 새로 생성 */
-async function jbCreate(token) {
-  try {
-    const res = await fetch(`${GH_API}/gists`, {
-      method: 'POST',
-      headers: {
-        'Accept':        'application/vnd.github+json',
-        'Authorization': 'Bearer ' + token,
-        'Content-Type':  'application/json'
-      },
-      body: JSON.stringify({
-        description: 'Eland Portfolio Images',
-        public: true,
-        files: { 'portfolio.json': { content: '{}' } }
-      })
-    });
-    if (!res.ok) return null;
-    const json = await res.json();
-    return json.id || null;
-  } catch(e) { return null; }
-}
+    localStorage.setItem('gh-token',  token);
+    localStorage.setItem('gh-owner',  owner);
+    localStorage.setItem('gh-repo',   repo);
+    localStorage.setItem('gh-branch', branch);
 
-/** 공유 저장소 연동 */
-async function connectJB() {
-  const keyEl = document.getElementById('jb-key-inp');
-  const token = keyEl ? keyEl.value.trim() : '';
-  if (!token) { alert('GitHub Token을 입력해주세요.'); return; }
+    updateGHStatusBar('idle', '✓ GitHub 연동됨');
+    if (status) status.textContent = `✅ 연동 성공: ${owner}/${repo} (${branch})`;
 
-  const statusEl = document.getElementById('jb-status-text');
-  const dot      = document.getElementById('jb-dot');
-  if (statusEl) statusEl.textContent = '연동 중...';
-  if (dot)      dot.className        = 'ssdot sync';
-
-  // 기존 Gist ID 사용 또는 새로 생성
-  let gistId = getGHGistId();
-  if (!gistId) {
-    gistId = await jbCreate(token);
-    if (!gistId) {
-      if (statusEl) statusEl.textContent = '연동 실패 — 토큰을 확인해주세요.';
-      if (dot)      dot.className        = 'ssdot';
-      alert('연동 실패.\nGitHub Token이 올바른지, gist 권한이 있는지 확인해주세요.');
-      return;
-    }
+    // 즉시 저장 실행
+    await saveToGitHub('초기 연동');
+    alert('✅ GitHub 연동 완료!\n이제 이미지·텍스트 변경사항이 자동으로 모든 방문자에게 반영됩니다.');
+  } catch(e) {
+    if (status) status.textContent = '❌ 연동 실패: ' + e.message;
+    alert('연동 실패: ' + e.message);
   }
-  localStorage.setItem('gh-token',   token);
-  localStorage.setItem('gh-gist-id', gistId);
-  updateShareStoreUI();
-  alert('✅ 공유 저장소 연동 완료!\n이제 이미지를 업로드하면 모든 방문자에게 자동 표시됩니다.');
-  await migrateLocalToCloud();
 }
 
-/** 공유 저장소 가이드 */
-function openJBGuide() {
+function openGHGuide() {
   alert(
-    '📋 GitHub Token 발급 방법 (3분, 무료)\n\n' +
-    '① github.com 로그인 (없으면 무료 가입)\n' +
-    '② 우측 상단 프로필 → Settings\n' +
-    '③ 좌측 하단 "Developer settings" 클릭\n' +
-    '④ Personal access tokens → Tokens (classic)\n' +
-    '⑤ "Generate new token (classic)" 클릭\n' +
-    '⑥ Note: eland-portfolio\n' +
-    '⑦ Expiration: No expiration\n' +
-    '⑧ Scopes: ☑ gist 체크\n' +
-    '⑨ "Generate token" → 토큰 복사\n\n' +
-    '복사한 토큰을 입력창에 붙여넣고 연동 버튼을 누르세요.'
+    '📋 GitHub 연동 설정 방법\n\n' +
+    '① github.com → Settings → Developer settings\n' +
+    '② Personal access tokens → Tokens (classic)\n' +
+    '③ Generate new token → Note: portfolio\n' +
+    '④ Expiration: No expiration\n' +
+    '⑤ Scopes: ☑ repo (전체 체크)\n' +
+    '⑥ Generate token → 복사\n\n' +
+    '저장소명: GitHub Pages를 배포한 저장소 이름\n' +
+    '브랜치: 보통 main 또는 master\n\n' +
+    '연동하면 변경사항이 자동으로 GitHub에 저장되고\n' +
+    '1~2분 후 모든 방문자에게 반영됩니다.'
   );
 }
 
-/** 로컬 이미지 → 공유 저장소 마이그레이션 */
-async function migrateLocalToCloud() {
-  const dids = ['d01','d02','d03','d04','d05','d06','d07',
-                'd08','d09','d10','d11','d12','d13','d14'];
-  const cloudData = (await jbRead()) || {};
-  let changed = false;
-  for (const did of dids) {
-    const local = getState(did).images;
-    if (local.length) { cloudData[did] = local; changed = true; }
-  }
-  if (changed) await jbWrite(cloudData);
+/** GitHub 상태바 업데이트 */
+function updateGHStatusBar(state, text, detail) {
+  const bar      = document.getElementById('gh-status-bar');
+  const textEl   = document.getElementById('gh-status-text');
+  const spinner  = document.getElementById('gh-spinner');
+  const lastEl   = document.getElementById('gh-last-saved');
+  if (!bar) return;
+  bar.className = state;   // idle | saving | error
+  if (textEl)  textEl.textContent  = text || '';
+  if (spinner) spinner.style.display = state === 'saving' ? '' : 'none';
+  if (lastEl && detail) lastEl.textContent = ' · ' + detail;
+  if (!ghReady()) bar.className = '';  // 미연동 시 숨김
 }
 
-/** 공유 저장소에서 전체 이미지 로드 */
-async function loadSharedImages() {
-  const data = await jbRead();
-  if (!data) return false;
-  let loaded = false;
-  for (const did of Object.keys(data)) {
-    const imgs = data[did];
-    if (Array.isArray(imgs) && imgs.length) {
-      getState(did).images = imgs;
-      getState(did).cur    = 0;
-      renderSlideshow(did);
-      loaded = true;
+/** GitHub에 현재 상태를 index.html로 커밋 */
+let _ghSaveTimer = null;
+function scheduleGHSave(reason) {
+  if (!ghReady()) return;
+  clearTimeout(_ghSaveTimer);
+  _ghSaveTimer = setTimeout(() => saveToGitHub(reason), 3000); // 3초 디바운스
+}
+
+async function saveToGitHub(reason) {
+  if (!ghReady()) return;
+  updateGHStatusBar('saving', '⏳ GitHub에 저장 중...');
+
+  try {
+    const token  = ghToken();
+    const owner  = ghOwner();
+    const repo   = ghRepo();
+    const branch = ghBranch();
+    const apiBase = `https://api.github.com/repos/${owner}/${repo}/contents/index.html`;
+
+    // 1. 현재 파일 SHA 조회
+    const metaRes = await fetch(apiBase + `?ref=${branch}`, {
+      headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github+json' }
+    });
+    if (!metaRes.ok) throw new Error('파일 조회 실패: ' + metaRes.status);
+    const meta = await metaRes.json();
+    const sha  = meta.sha;
+
+    // 2. 현재 DOM 상태 + 모든 localStorage 수집
+    const lsData = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      lsData[k] = localStorage.getItem(k);
     }
-  }
-  return loaded;
-}
 
-/** 공유 저장소 UI 갱신 */
-function updateShareStoreUI() {
-  const token  = getGHToken();
-  const gistId = getGHGistId();
-  const ok     = !!(token && gistId);
-  const dot    = document.getElementById('jb-dot');
-  const label  = document.getElementById('jb-status-text');
-  const keyEl  = document.getElementById('jb-key-inp');
-  if (dot)   dot.className    = 'ssdot ' + (ok ? 'on' : '');
-  if (label) {
-    label.textContent = ok
-      ? '🌐 GitHub Gist 연동됨 — 모든 방문자에게 이미지 공유 중'
-      : '공유 저장소 미연동 — 이 기기에서만 이미지 보임';
-    label.style.color = ok ? '#059669' : '#92400E';
-  }
-  if (keyEl && !keyEl.value && token) keyEl.value = token;
-}
-
-// ── saveImages 오버라이드: IndexedDB + Gist 동시 저장 ──────────────────
-const _origSaveImages = saveImages;
-saveImages = async function(did) {
-  await _origSaveImages(did);
-  if (getGHToken() && getGHGistId()) {
+    // 3. IndexedDB 이미지 수집
     try {
-      const dot = document.getElementById('jb-dot');
-      if (dot) dot.className = 'ssdot sync';
-      const data = (await jbRead()) || {};
-      data[did]  = getState(did).images;
-      const ok   = await jbWrite(data);
-      if (dot) dot.className = ok ? 'ssdot on' : 'ssdot';
-    } catch(e) { console.warn('공유 저장소 저장 실패:', e); }
+      const dids = ['d01','d02','d03','d04','d05','d06','d07',
+                    'd08','d09','d10','d11','d12','d13','d14'];
+      await Promise.all(dids.map(async did => {
+        const state = getState(did);
+        if (state.images.length) {
+          lsData['portfolio_' + did] = JSON.stringify(state.images);
+        }
+      }));
+    } catch(e) {}
+
+    // 4. 버튼 정상 상태로 복원 후 DOM 캡처
+    const saveBtn  = document.getElementById('save-file-btn');
+    const shareSaveBtn = document.getElementById('share-save-btn');
+    const origSaveText  = saveBtn?.innerHTML;
+    const origShareText = shareSaveBtn?.innerHTML;
+    if (saveBtn)      { saveBtn.innerHTML = '📥 파일로 저장'; saveBtn.classList.remove('saving'); }
+    if (shareSaveBtn) { shareSaveBtn.innerHTML = '📤 공유용으로 저장'; shareSaveBtn.style.pointerEvents = ''; }
+
+    const picker = document.getElementById('comp-picker');
+    if (picker) picker.style.display = 'none';
+
+    let doc = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+
+    if (picker) picker.style.display = '';
+    if (saveBtn && origSaveText)      saveBtn.innerHTML = origSaveText;
+    if (shareSaveBtn && origShareText) shareSaveBtn.innerHTML = origShareText;
+
+    // 5. HTML 정리
+    doc = doc.replace(/<script id="__ls_restore__">[\s\S]*?<\/script>\s*/g, '');
+    doc = doc.replace(/<style id="__share_lock__">[\s\S]*?<\/style>\s*/g, '');
+    doc = doc.replace(/<div id="comp-picker"[\s\S]*?<\/div>\s*/g, '');
+    doc = doc.replace(/class="save-file-btn saving"/g, 'class="save-file-btn"');
+
+    // 6. localStorage 복원 스크립트 삽입
+    const jsonStr = JSON.stringify(lsData)
+      .replace(/<\/script>/gi, '<\\/script>')
+      .replace(/<!--/g, '<\\!--');
+    const restoreScript = [
+      '<script id="__ls_restore__">',
+      '(function(){',
+      '  var D=' + jsonStr + ';',
+      '  try{ for(var k in D) localStorage.setItem(k,D[k]); }catch(e){}',
+      '})();',
+      '<\/script>'
+    ].join('\n');
+    doc = doc.replace('</head>', restoreScript + '\n</head>');
+
+    // 7. base64 인코딩 후 GitHub에 커밋
+    const b64 = btoa(unescape(encodeURIComponent(doc)));
+    const now  = new Date().toLocaleString('ko-KR');
+
+    const pushRes = await fetch(apiBase, {
+      method:  'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept':        'application/vnd.github+json',
+        'Content-Type':  'application/json'
+      },
+      body: JSON.stringify({
+        message: `포트폴리오 업데이트: ${reason || '변경사항 반영'} (${now})`,
+        content: b64,
+        sha:     sha,
+        branch:  branch
+      })
+    });
+
+    if (!pushRes.ok) {
+      const err = await pushRes.json();
+      throw new Error(err.message || '커밋 실패 (' + pushRes.status + ')');
+    }
+
+    updateGHStatusBar('idle', '✓ GitHub 저장 완료', now + ' 반영됨');
+    localStorage.setItem('gh-last-saved', now);
+
+  } catch(e) {
+    console.error('GitHub 저장 실패:', e);
+    updateGHStatusBar('error', '❌ 저장 실패: ' + e.message);
   }
-};
+}
+
+/** GitHub 연동 UI 초기화 */
+function initGHSetup() {
+  if (!isAdmin()) return;
+  const tokenInp  = document.getElementById('gh-token-inp');
+  const ownerInp  = document.getElementById('gh-owner-inp');
+  const repoInp   = document.getElementById('gh-repo-inp');
+  const branchInp = document.getElementById('gh-branch-inp');
+  const status    = document.getElementById('gh-setup-status');
+
+  if (tokenInp  && ghToken())  tokenInp.value  = ghToken();
+  if (ownerInp  && ghOwner())  ownerInp.value  = ghOwner();
+  if (repoInp   && ghRepo())   repoInp.value   = ghRepo();
+  if (branchInp && ghBranch()) branchInp.value = ghBranch();
+
+  if (ghReady()) {
+    const last = localStorage.getItem('gh-last-saved') || '';
+    updateGHStatusBar('idle', '✓ GitHub 연동됨', last ? last + ' 마지막 저장' : '');
+    if (status) status.textContent = `연동됨: ${ghOwner()}/${ghRepo()} (${ghBranch()})`;
+    document.getElementById('gh-setup-panel').style.display = 'none'; // 연동됐으면 패널 축소
+  }
+}
 
 </script>
 
